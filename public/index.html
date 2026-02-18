@@ -194,10 +194,10 @@
     <p>Waiting for reconnection...</p>
   </div>
 
-  <!-- CDN Libraries -->
+  <!-- CDN Libraries (socket.io from CDN so it works on Vercel where there is no Node server) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
   <script src="game.js"></script>
 
   <script>
@@ -206,138 +206,143 @@
     let gameInstance = null;
     let playerNames = {};
 
-    // --- Socket connection ---
-    const socket = io();
+    // --- Socket: connect using /api/config on Vercel (SOCKET_SERVER_URL), or same-origin when local ---
+    (async function initSocket() {
+      let socketUrl = '';
+      try {
+        const r = await fetch(window.location.origin + '/api/config');
+        if (r.ok) {
+          const d = await r.json();
+          socketUrl = d.socketUrl || '';
+        }
+      } catch (_) {}
+      const socket = io(socketUrl || undefined);
 
-    // --- Screen management (QR screen stays visible until game starts; only game-container replaces it) ---
-    function showScreen(id) {
-      document.getElementById('qr-screen').style.display = 'none';
-      document.getElementById('game-container').style.display = 'none';
-      const el = document.getElementById(id);
-      el.style.display = (id === 'game-container') ? 'block' : 'flex';
-    }
+      // --- Screen management (QR screen stays visible until game starts; only game-container replaces it) ---
+      function showScreen(id) {
+        document.getElementById('qr-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'none';
+        const el = document.getElementById(id);
+        el.style.display = (id === 'game-container') ? 'block' : 'flex';
+      }
 
-    // --- Create room on load ---
-    socket.emit('host-create-room');
+      // --- Create room on load ---
+      socket.emit('host-create-room');
 
-    socket.on('room-created', ({ roomCode, localIP, port }) => {
-      currentRoomCode = roomCode;
-      const url = `http://${localIP}:${port}/controller.html?room=${roomCode}`;
+      socket.on('room-created', ({ roomCode, localIP, port }) => {
+        currentRoomCode = roomCode;
+        // When host is on Vercel, QR must point to Vercel. When local, use LAN IP so phones can join.
+        const isLocal = /^localhost$|^127\.0\.0\.1$/i.test(window.location.hostname);
+        const url = isLocal && port ? `http://${localIP}:${port}/controller.html?room=${roomCode}` : (window.location.origin + '/controller.html?room=' + roomCode);
 
-      // Generate QR code
-      new QRCode(document.getElementById('qr-box'), {
-        text: url,
-        width: 220,
-        height: 220,
-        colorDark: '#000000',
-        colorLight: '#ffffff'
+        // Generate QR code
+        new QRCode(document.getElementById('qr-box'), {
+          text: url,
+          width: 220,
+          height: 220,
+          colorDark: '#000000',
+          colorLight: '#ffffff'
+        });
+
+        document.getElementById('room-code-display').textContent = roomCode;
       });
 
-      document.getElementById('room-code-display').textContent = roomCode;
-    });
+      // --- Player joined (QR stays visible; show lobby section below QR) ---
+      socket.on('player-joined', ({ playerList }) => {
+        playerList.forEach(p => {
+          playerNames[p.playerIndex] = p.nickname;
+        });
 
-    // --- Player joined (QR stays visible; show lobby section below QR) ---
-    socket.on('player-joined', ({ playerList }) => {
-      playerList.forEach(p => {
-        playerNames[p.playerIndex] = p.nickname;
+        if (playerList.length === 2) {
+          document.getElementById('disconnect-overlay').style.display = 'none';
+        }
+
+        // Stay on qr-screen; show lobby section so everyone can still scan QR
+        if (document.getElementById('game-container').style.display !== 'flex' &&
+            document.getElementById('game-container').style.display !== 'block') {
+          document.getElementById('qr-screen').style.display = 'flex';
+          document.getElementById('lobby-section').classList.remove('hidden');
+          document.getElementById('initial-waiting').style.display = playerList.length ? 'none' : 'block';
+        }
+        updateLobby(playerList);
       });
 
-      if (playerList.length === 2) {
-        document.getElementById('disconnect-overlay').style.display = 'none';
+      // --- Ready update ---
+      socket.on('player-ready-update', ({ playerList }) => {
+        updateLobby(playerList);
+      });
+
+      function updateLobby(playerList) {
+        for (let i = 0; i < 2; i++) {
+          document.getElementById(`nick-${i}`).textContent = '\u2014';
+          document.getElementById(`ready-${i}`).textContent = '';
+          document.getElementById(`ready-${i}`).className = 'ready-indicator not-ready';
+        }
+
+        playerList.forEach(p => {
+          document.getElementById(`nick-${p.playerIndex}`).textContent = p.nickname;
+          const readyEl = document.getElementById(`ready-${p.playerIndex}`);
+          if (p.ready) {
+            readyEl.textContent = 'READY';
+            readyEl.className = 'ready-indicator ready';
+          } else {
+            readyEl.textContent = 'waiting...';
+            readyEl.className = 'ready-indicator not-ready';
+          }
+        });
       }
 
-      // Stay on qr-screen; show lobby section so everyone can still scan QR
-      if (document.getElementById('game-container').style.display !== 'flex' &&
-          document.getElementById('game-container').style.display !== 'block') {
-        document.getElementById('qr-screen').style.display = 'flex';
-        document.getElementById('lobby-section').classList.remove('hidden');
-        document.getElementById('initial-waiting').style.display = playerList.length ? 'none' : 'block';
-      }
-      updateLobby(playerList);
-    });
+      // --- Ensure audio context is active (needs user gesture on host page) ---
+      document.addEventListener('click', () => {
+        if (typeof initAudio === 'function') initAudio();
+      }, { once: true });
+      document.addEventListener('touchstart', () => {
+        if (typeof initAudio === 'function') initAudio();
+      }, { once: true });
 
-    // --- Ready update ---
-    socket.on('player-ready-update', ({ playerList }) => {
-      updateLobby(playerList);
-    });
+      // --- Game start ---
+      socket.on('game-start', ({ level, lives }) => {
+        if (typeof initAudio === 'function') initAudio();
 
-    function updateLobby(playerList) {
-      for (let i = 0; i < 2; i++) {
-        document.getElementById(`nick-${i}`).textContent = '\u2014';
-        document.getElementById(`ready-${i}`).textContent = '';
-        document.getElementById(`ready-${i}`).className = 'ready-indicator not-ready';
-      }
+        showScreen('game-container');
 
-      playerList.forEach(p => {
-        document.getElementById(`nick-${p.playerIndex}`).textContent = p.nickname;
-        const readyEl = document.getElementById(`ready-${p.playerIndex}`);
-        if (p.ready) {
-          readyEl.textContent = 'READY';
-          readyEl.className = 'ready-indicator ready';
+        if (!gameInstance) {
+          gameInstance = createGame(socket, currentRoomCode, playerNames);
         } else {
-          readyEl.textContent = 'waiting...';
-          readyEl.className = 'ready-indicator not-ready';
+          gameInstance.scene.getScene('GameScene').scene.restart({ level: 1, lives: lives || 3, score: 0 });
         }
       });
-    }
 
-    // --- Ensure audio context is active (needs user gesture on host page) ---
-    // The host may never click the page, so we prompt a click or use the first interaction
-    document.addEventListener('click', () => {
-      if (typeof initAudio === 'function') initAudio();
-    }, { once: true });
-    document.addEventListener('touchstart', () => {
-      if (typeof initAudio === 'function') initAudio();
-    }, { once: true });
+      socket.on('game-victory', ({ score, lives }) => {
+        if (gameInstance) {
+          gameInstance._finalScore = score || 0;
+          gameInstance._finalLives = lives || 0;
+          gameInstance._playerNames = playerNames;
+        }
+      });
 
-    // --- Game start ---
-    socket.on('game-start', ({ level, lives }) => {
-      // Try to init audio when game starts (may work if user clicked page)
-      if (typeof initAudio === 'function') initAudio();
-
-      showScreen('game-container');
-
-      if (!gameInstance) {
-        gameInstance = createGame(socket, currentRoomCode, playerNames);
-      } else {
-        // Restart game scene with fresh lives
-        gameInstance.scene.getScene('GameScene').scene.restart({ level: 1, lives: lives || 3, score: 0 });
-      }
-    });
-
-    // --- Victory (store score/lives for VictoryScene) ---
-    socket.on('game-victory', ({ score, lives }) => {
-      if (gameInstance) {
-        gameInstance._finalScore = score || 0;
-        gameInstance._finalLives = lives || 0;
-        gameInstance._playerNames = playerNames;
-      }
-    });
-
-    // --- Player disconnected during game ---
-    socket.on('player-disconnected', ({ playerIndex }) => {
-      document.getElementById('disconnect-overlay').style.display = 'flex';
-    });
-
-    // --- Player left ---
-    socket.on('player-left', ({ playerIndex }) => {
-      if (document.getElementById('game-container').style.display !== 'none') {
+      socket.on('player-disconnected', ({ playerIndex }) => {
         document.getElementById('disconnect-overlay').style.display = 'flex';
-      }
-    });
+      });
 
-    // --- Back to lobby (QR screen with lobby section, QR still visible) ---
-    socket.on('back-to-lobby', ({ playerList }) => {
-      document.getElementById('disconnect-overlay').style.display = 'none';
-      showScreen('qr-screen');
-      document.getElementById('lobby-section').classList.remove('hidden');
-      updateLobby(playerList);
+      socket.on('player-left', ({ playerIndex }) => {
+        if (document.getElementById('game-container').style.display !== 'none') {
+          document.getElementById('disconnect-overlay').style.display = 'flex';
+        }
+      });
 
-      if (gameInstance) {
-        gameInstance.destroy(true);
-        gameInstance = null;
-      }
-    });
+      socket.on('back-to-lobby', ({ playerList }) => {
+        document.getElementById('disconnect-overlay').style.display = 'none';
+        showScreen('qr-screen');
+        document.getElementById('lobby-section').classList.remove('hidden');
+        updateLobby(playerList);
+
+        if (gameInstance) {
+          gameInstance.destroy(true);
+          gameInstance = null;
+        }
+      });
+    })();
   </script>
 </body>
 </html>

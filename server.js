@@ -15,6 +15,11 @@ const PORT = process.env.PORT || 3000;
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Local dev: /api/config so client can use same code path (returns empty = same origin)
+app.get('/api/config', (req, res) => {
+  res.json({ socketUrl: '' });
+});
+
 // --- LAN IP Detection ---
 function getLocalIP() {
   const nets = os.networkInterfaces();

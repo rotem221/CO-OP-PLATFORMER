@@ -324,249 +324,237 @@
     <p>All levels complete!</p>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
   <script>
     // --- State ---
     let myRoomCode = null;
     let myPlayerIndex = null;
     const inputState = { left: false, right: false, jump: false };
 
-    // Pre-fill room code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
     if (roomFromUrl) {
       document.getElementById('room-code').value = roomFromUrl;
     }
 
-    // --- Socket ---
-    const socket = io();
+    // --- Socket: use /api/config on Vercel (SOCKET_SERVER_URL), or same-origin when local ---
+    (async function initSocket() {
+      let socketUrl = '';
+      try {
+        const r = await fetch(window.location.origin + '/api/config');
+        if (r.ok) {
+          const d = await r.json();
+          socketUrl = d.socketUrl || '';
+        }
+      } catch (_) {}
+      const socket = io(socketUrl || undefined);
 
-    // --- Screen management ---
-    function showScreen(id) {
-      ['join-screen', 'ready-screen', 'controls-screen'].forEach(s => {
-        document.getElementById(s).style.display = 'none';
-      });
-      const el = document.getElementById(id);
-      el.style.display = (id === 'controls-screen') ? 'block' : 'flex';
-    }
-
-    // --- Join ---
-    document.getElementById('join-btn').addEventListener('click', () => {
-      const roomCode = document.getElementById('room-code').value.trim();
-      const nickname = document.getElementById('nickname').value.trim();
-
-      if (!roomCode || roomCode.length !== 4) {
-        document.getElementById('join-error').textContent = 'Enter a 4-digit room code';
-        return;
-      }
-      if (!nickname) {
-        document.getElementById('join-error').textContent = 'Enter your name';
-        return;
+      function showScreen(id) {
+        ['join-screen', 'ready-screen', 'controls-screen'].forEach(s => {
+          document.getElementById(s).style.display = 'none';
+        });
+        const el = document.getElementById(id);
+        el.style.display = (id === 'controls-screen') ? 'block' : 'flex';
       }
 
-      document.getElementById('join-error').textContent = '';
-      myRoomCode = roomCode;
-      socket.emit('player-join', { roomCode, nickname });
-    });
+      document.getElementById('join-btn').addEventListener('click', () => {
+        const roomCode = document.getElementById('room-code').value.trim();
+        const nickname = document.getElementById('nickname').value.trim();
 
-    // Also allow Enter key on inputs
-    document.getElementById('nickname').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('join-btn').click();
-    });
-    document.getElementById('room-code').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('nickname').focus();
-    });
+        if (!roomCode || roomCode.length !== 4) {
+          document.getElementById('join-error').textContent = 'Enter a 4-digit room code';
+          return;
+        }
+        if (!nickname) {
+          document.getElementById('join-error').textContent = 'Enter your name';
+          return;
+        }
 
-    socket.on('join-success', ({ playerIndex }) => {
-      myPlayerIndex = playerIndex;
-      const colorEl = document.getElementById('player-color');
-      if (playerIndex === 0) {
-        colorEl.textContent = 'CYAN';
-        colorEl.className = 'cyan';
-      } else {
-        colorEl.textContent = 'MAGENTA';
-        colorEl.className = 'magenta';
-      }
-      showScreen('ready-screen');
-    });
-
-    socket.on('join-error', ({ message }) => {
-      document.getElementById('join-error').textContent = message;
-    });
-
-    // --- Ready ---
-    document.getElementById('ready-btn').addEventListener('click', () => {
-      socket.emit('player-ready', { roomCode: myRoomCode });
-      document.getElementById('ready-btn').classList.add('pressed');
-      document.getElementById('ready-btn').textContent = 'READY!';
-    });
-
-    socket.on('player-ready-update', ({ playerList }) => {
-      const statuses = playerList.map(p =>
-        `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
-      ).join('\n');
-      document.getElementById('ready-status').textContent = statuses;
-    });
-
-    // --- Game Start ---
-    socket.on('game-start', () => {
-      showScreen('controls-screen');
-      requestWakeLock();
-    });
-
-    // --- Touch Controls ---
-    function setupButton(id, key) {
-      const btn = document.getElementById(id);
-
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        inputState[key] = true;
-        btn.classList.add('active');
-        sendInput();
-      }, { passive: false });
-
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        inputState[key] = false;
-        btn.classList.remove('active');
-        sendInput();
-      }, { passive: false });
-
-      btn.addEventListener('touchcancel', (e) => {
-        e.preventDefault();
-        inputState[key] = false;
-        btn.classList.remove('active');
-        sendInput();
-      }, { passive: false });
-
-      // Mouse fallback for desktop testing
-      btn.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        inputState[key] = true;
-        btn.classList.add('active');
-        sendInput();
+        document.getElementById('join-error').textContent = '';
+        myRoomCode = roomCode;
+        socket.emit('player-join', { roomCode, nickname });
       });
-      btn.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        inputState[key] = false;
-        btn.classList.remove('active');
-        sendInput();
+
+      document.getElementById('nickname').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('join-btn').click();
       });
-      btn.addEventListener('mouseleave', (e) => {
-        if (inputState[key]) {
+      document.getElementById('room-code').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('nickname').focus();
+      });
+
+      socket.on('join-success', ({ playerIndex }) => {
+        myPlayerIndex = playerIndex;
+        const colorEl = document.getElementById('player-color');
+        if (playerIndex === 0) {
+          colorEl.textContent = 'CYAN';
+          colorEl.className = 'cyan';
+        } else {
+          colorEl.textContent = 'MAGENTA';
+          colorEl.className = 'magenta';
+        }
+        showScreen('ready-screen');
+      });
+
+      socket.on('join-error', ({ message }) => {
+        document.getElementById('join-error').textContent = message;
+      });
+
+      document.getElementById('ready-btn').addEventListener('click', () => {
+        socket.emit('player-ready', { roomCode: myRoomCode });
+        document.getElementById('ready-btn').classList.add('pressed');
+        document.getElementById('ready-btn').textContent = 'READY!';
+      });
+
+      socket.on('player-ready-update', ({ playerList }) => {
+        const statuses = playerList.map(p =>
+          `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
+        ).join('\n');
+        document.getElementById('ready-status').textContent = statuses;
+      });
+
+      socket.on('game-start', () => {
+        showScreen('controls-screen');
+        requestWakeLock();
+      });
+
+      function setupButton(id, key) {
+        const btn = document.getElementById(id);
+
+        btn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          inputState[key] = true;
+          btn.classList.add('active');
+          sendInput();
+        }, { passive: false });
+
+        btn.addEventListener('touchend', (e) => {
+          e.preventDefault();
           inputState[key] = false;
           btn.classList.remove('active');
           sendInput();
-        }
-      });
-    }
+        }, { passive: false });
 
-    setupButton('btn-left', 'left');
-    setupButton('btn-right', 'right');
-    setupButton('btn-jump', 'jump');
+        btn.addEventListener('touchcancel', (e) => {
+          e.preventDefault();
+          inputState[key] = false;
+          btn.classList.remove('active');
+          sendInput();
+        }, { passive: false });
 
-    function sendInput() {
-      if (myRoomCode) {
-        socket.volatile.emit('player-input', {
-          roomCode: myRoomCode,
-          input: { ...inputState }
+        btn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          inputState[key] = true;
+          btn.classList.add('active');
+          sendInput();
+        });
+        btn.addEventListener('mouseup', (e) => {
+          e.preventDefault();
+          inputState[key] = false;
+          btn.classList.remove('active');
+          sendInput();
+        });
+        btn.addEventListener('mouseleave', (e) => {
+          if (inputState[key]) {
+            inputState[key] = false;
+            btn.classList.remove('active');
+            sendInput();
+          }
         });
       }
-    }
 
-    // --- WakeLock ---
-    let wakeLock = null;
-    async function requestWakeLock() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-          document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && !wakeLock) {
-              wakeLock = await navigator.wakeLock.request('screen');
-            }
+      setupButton('btn-left', 'left');
+      setupButton('btn-right', 'right');
+      setupButton('btn-jump', 'jump');
+
+      function sendInput() {
+        if (myRoomCode) {
+          socket.volatile.emit('player-input', {
+            roomCode: myRoomCode,
+            input: { ...inputState }
           });
         }
-      } catch (err) {
-        // WakeLock not available, silently ignore
       }
-    }
 
-    // --- Game Events ---
-    socket.on('reset-level', () => {
-      // Haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
+      let wakeLock = null;
+      async function requestWakeLock() {
+        try {
+          if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            document.addEventListener('visibilitychange', async () => {
+              if (document.visibilityState === 'visible' && !wakeLock) {
+                wakeLock = await navigator.wakeLock.request('screen');
+              }
+            });
+          }
+        } catch (err) {}
       }
-      // Flash red
-      const flash = document.getElementById('death-flash');
-      flash.style.display = 'block';
-      setTimeout(() => { flash.style.display = 'none'; }, 300);
-    });
 
-    // Lives update
-    socket.on('lives-update', ({ lives }) => {
-      const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
-      document.getElementById('lives-display').textContent = heartsStr || '---';
-    });
+      socket.on('reset-level', () => {
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        const flash = document.getElementById('death-flash');
+        flash.style.display = 'block';
+        setTimeout(() => { flash.style.display = 'none'; }, 300);
+      });
 
-    // Game over (no lives)
-    socket.on('game-over-lives', ({ score, level }) => {
-      document.getElementById('gameover-overlay').style.display = 'flex';
-      document.getElementById('gameover-score').textContent = `Score: ${score}`;
-      if (navigator.vibrate) {
-        navigator.vibrate([200, 100, 200, 100, 200]);
-      }
-    });
-
-    // Retry level (after game over)
-    socket.on('retry-level', ({ level, lives }) => {
-      document.getElementById('gameover-overlay').style.display = 'none';
-      const heartsStr = Array(lives).fill('\u2764').join(' ');
-      document.getElementById('lives-display').textContent = heartsStr;
-      document.getElementById('level-display').textContent = `LEVEL ${level}`;
-    });
-
-    socket.on('level-transition', ({ nextLevel, score, lives }) => {
-      document.getElementById('level-display').textContent = `LEVEL ${nextLevel}`;
-      if (lives !== undefined) {
+      socket.on('lives-update', ({ lives }) => {
         const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
+        document.getElementById('lives-display').textContent = heartsStr || '---';
+      });
+
+      socket.on('game-over-lives', ({ score, level }) => {
+        document.getElementById('gameover-overlay').style.display = 'flex';
+        document.getElementById('gameover-score').textContent = `Score: ${score}`;
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+      });
+
+      socket.on('retry-level', ({ level, lives }) => {
+        document.getElementById('gameover-overlay').style.display = 'none';
+        const heartsStr = Array(lives).fill('\u2764').join(' ');
         document.getElementById('lives-display').textContent = heartsStr;
-      }
-    });
+        document.getElementById('level-display').textContent = `LEVEL ${level}`;
+      });
 
-    socket.on('game-victory', ({ score, lives }) => {
-      const overlay = document.getElementById('victory-overlay');
-      overlay.style.display = 'flex';
-      const heartsStr = lives > 0 ? Array(lives).fill('\u2764').join(' ') : '';
-      overlay.innerHTML = `
-        <h1 style="font-size:2.2rem; color:#0f0; text-shadow:0 0 30px #0f0; letter-spacing:4px;">VICTORY!</h1>
-        <p style="color:#0ff; text-shadow:0 0 10px #0ff;">All levels complete!</p>
-        <p style="color:#ffff00; font-size:1.5rem; margin-top:12px;">Score: ${score || 0}</p>
-        <p style="color:#ff0044; font-size:1.3rem;">${heartsStr}</p>
-      `;
-    });
+      socket.on('level-transition', ({ nextLevel, score, lives }) => {
+        document.getElementById('level-display').textContent = `LEVEL ${nextLevel}`;
+        if (lives !== undefined) {
+          const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
+          document.getElementById('lives-display').textContent = heartsStr;
+        }
+      });
 
-    socket.on('back-to-lobby', ({ playerList }) => {
-      document.getElementById('victory-overlay').style.display = 'none';
-      document.getElementById('gameover-overlay').style.display = 'none';
-      document.getElementById('ready-btn').classList.remove('pressed');
-      document.getElementById('ready-btn').textContent = 'READY';
-      document.getElementById('lives-display').textContent = '\u2764 \u2764 \u2764';
-      showScreen('ready-screen');
+      socket.on('game-victory', ({ score, lives }) => {
+        const overlay = document.getElementById('victory-overlay');
+        overlay.style.display = 'flex';
+        const heartsStr = lives > 0 ? Array(lives).fill('\u2764').join(' ') : '';
+        overlay.innerHTML = `
+          <h1 style="font-size:2.2rem; color:#0f0; text-shadow:0 0 30px #0f0; letter-spacing:4px;">VICTORY!</h1>
+          <p style="color:#0ff; text-shadow:0 0 10px #0ff;">All levels complete!</p>
+          <p style="color:#ffff00; font-size:1.5rem; margin-top:12px;">Score: ${score || 0}</p>
+          <p style="color:#ff0044; font-size:1.3rem;">${heartsStr}</p>
+        `;
+      });
 
-      const statuses = playerList.map(p =>
-        `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
-      ).join('\n');
-      document.getElementById('ready-status').textContent = statuses;
-    });
+      socket.on('back-to-lobby', ({ playerList }) => {
+        document.getElementById('victory-overlay').style.display = 'none';
+        document.getElementById('gameover-overlay').style.display = 'none';
+        document.getElementById('ready-btn').classList.remove('pressed');
+        document.getElementById('ready-btn').textContent = 'READY';
+        document.getElementById('lives-display').textContent = '\u2764 \u2764 \u2764';
+        showScreen('ready-screen');
 
-    socket.on('room-closed', () => {
-      alert('Host disconnected. Room closed.');
-      location.reload();
-    });
+        const statuses = playerList.map(p =>
+          `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
+        ).join('\n');
+        document.getElementById('ready-status').textContent = statuses;
+      });
 
-    // Prevent zoom/scroll on the whole page
-    document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+      socket.on('room-closed', () => {
+        alert('Host disconnected. Room closed.');
+        location.reload();
+      });
+
+      document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+    })();
   </script>
 </body>
 </html>
