@@ -7,7 +7,6 @@
   <style>
     * {
       margin: 0; padding: 0; box-sizing: border-box;
-      touch-action: manipulation;
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -19,6 +18,13 @@
       color: #fff;
       font-family: 'Courier New', monospace;
     }
+    /* Allow normal touch on inputs */
+    input, button, .face-btn, .video-toggle-btn {
+      touch-action: manipulation;
+    }
+    /* Controls screen blocks all touch defaults */
+    #controls-screen { touch-action: none; }
+    #controls-screen * { touch-action: none; }
 
     /* --- Join Screen --- */
     #join-screen {
@@ -952,8 +958,12 @@
       location.reload();
     });
 
-    // Prevent zoom/scroll on the whole page
-    document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+    // Prevent zoom/scroll only on controls screen (not on join/ready screens)
+    document.addEventListener('touchmove', (e) => {
+      if (document.getElementById('controls-screen').style.display !== 'none') {
+        e.preventDefault();
+      }
+    }, { passive: false });
   </script>
 </body>
 </html>

@@ -209,6 +209,7 @@
       gap: 12px;
       flex: 1;
       min-width: 0;
+      max-width: 400px;
     }
 
     /* --- QR + Room Code --- */
@@ -1198,6 +1199,8 @@
       levelSelectSection.style.display = 'none';
       document.getElementById('lobby-section').classList.add('hidden');
       document.querySelector('.hero-section').style.display = 'none';
+      // Hide QR side entirely so config-side centers
+      document.querySelector('.qr-side').style.display = 'none';
 
       // Show viewer join form
       document.getElementById('viewer-join-section').style.display = 'flex';
@@ -1218,6 +1221,7 @@
       playerCountSection.style.display = '';
       levelSelectSection.style.display = '';
       document.querySelector('.hero-section').style.display = '';
+      document.querySelector('.qr-side').style.display = '';
       if (currentRoomCode) {
         document.getElementById('initial-waiting').style.display = 'none';
         document.getElementById('lobby-section').classList.remove('hidden');
