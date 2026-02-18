@@ -294,6 +294,89 @@
       color: #0ff;
       text-shadow: 0 0 10px #0ff;
     }
+
+    /* --- Video Chat --- */
+    #camera-preview-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .video-circle {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid var(--player-color, #0ff);
+      box-shadow: 0 0 12px var(--player-color, #0ff);
+      background: #111;
+      position: relative;
+    }
+    .video-circle video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    .video-circle .fallback-face {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      background: #111;
+    }
+    .video-toggle-row {
+      display: flex;
+      gap: 10px;
+    }
+    .video-toggle-btn {
+      width: 44px; height: 44px;
+      font-size: 1.3rem;
+      background: #111;
+      border: 2px solid #0f0;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+    }
+    .video-toggle-btn.off {
+      border-color: #f44;
+      box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
+      opacity: 0.6;
+    }
+    #remote-videos-bar {
+      position: fixed;
+      top: 4px; left: 8px;
+      display: flex;
+      gap: 6px;
+      z-index: 15;
+      pointer-events: none;
+    }
+    .remote-video-circle {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid var(--player-color, #0ff);
+      box-shadow: 0 0 6px var(--player-color, #0ff);
+      background: #111;
+      position: relative;
+    }
+    .remote-video-circle video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .remote-video-circle .fallback-face {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      background: #111;
+    }
   </style>
 </head>
 <body>
@@ -323,12 +406,24 @@
       <button class="face-btn" data-face="wink">😜</button>
       <button class="face-btn" data-face="skull">💀</button>
     </div>
+    <!-- Camera preview & toggles -->
+    <div id="camera-preview-container">
+      <div class="video-circle" id="local-video-circle" style="--player-color: #0ff;">
+        <video id="local-preview-video" autoplay muted playsinline></video>
+        <div class="fallback-face" id="local-fallback-face">😊</div>
+      </div>
+      <div class="video-toggle-row">
+        <button class="video-toggle-btn" id="toggle-camera" title="Camera">📷</button>
+        <button class="video-toggle-btn" id="toggle-mic" title="Microphone">🎤</button>
+      </div>
+    </div>
     <button id="ready-btn">READY</button>
     <div id="ready-status"></div>
   </div>
 
   <!-- Controls Screen -->
   <div id="controls-screen">
+    <div id="remote-videos-bar"></div>
     <div id="level-display">LEVEL 1</div>
     <div id="lives-display">&#10084; &#10084; &#10084;</div>
     <div class="ctrl-area" id="area-left">
@@ -367,6 +462,159 @@
     let myFace = 'smiley';
     const inputState = { left: false, right: false, jump: false };
 
+    // --- WebRTC State ---
+    let localStream = null;
+    let cameraEnabled = true;
+    let micEnabled = true;
+    const peerConnections = {};
+    const remoteStreams = {};
+    const PLAYER_COLORS_CSS = ['#0ff', '#f0f', '#ff0', '#0f0'];
+    const FACE_EMOJIS = {
+      smiley: '\u{1F60A}', crazy: '\u{1F92A}', angry: '\u{1F620}',
+      cool: '\u{1F60E}', wink: '\u{1F61C}', skull: '\u{1F480}'
+    };
+    const ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    async function initCamera() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 120 }, height: { ideal: 120 } },
+          audio: true
+        });
+        document.getElementById('local-preview-video').srcObject = localStream;
+        document.getElementById('local-fallback-face').style.display = 'none';
+      } catch (err) {
+        console.warn('[webrtc] Camera access denied:', err.message);
+        localStream = null;
+        document.getElementById('local-fallback-face').style.display = 'flex';
+        document.getElementById('toggle-camera').classList.add('off');
+        document.getElementById('toggle-mic').classList.add('off');
+        cameraEnabled = false;
+        micEnabled = false;
+      }
+    }
+
+    document.getElementById('toggle-camera').addEventListener('click', () => {
+      if (!localStream) return;
+      cameraEnabled = !cameraEnabled;
+      localStream.getVideoTracks().forEach(t => { t.enabled = cameraEnabled; });
+      const btn = document.getElementById('toggle-camera');
+      btn.classList.toggle('off', !cameraEnabled);
+      document.getElementById('local-fallback-face').style.display = cameraEnabled ? 'none' : 'flex';
+    });
+
+    document.getElementById('toggle-mic').addEventListener('click', () => {
+      if (!localStream) return;
+      micEnabled = !micEnabled;
+      localStream.getAudioTracks().forEach(t => { t.enabled = micEnabled; });
+      document.getElementById('toggle-mic').classList.toggle('off', !micEnabled);
+    });
+
+    // --- WebRTC Peer Connection ---
+    function createPeerConnection(peerId) {
+      if (peerConnections[peerId]) peerConnections[peerId].close();
+      const pc = new RTCPeerConnection(ICE_CONFIG);
+      peerConnections[peerId] = pc;
+      if (localStream) {
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      }
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('webrtc-ice-candidate', {
+            roomCode: myRoomCode, from: myPlayerIndex, to: peerId, candidate: event.candidate
+          });
+        }
+      };
+      pc.ontrack = (event) => {
+        remoteStreams[peerId] = event.streams[0];
+        updateRemoteVideoUI();
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          delete remoteStreams[peerId];
+          updateRemoteVideoUI();
+        }
+      };
+      return pc;
+    }
+
+    async function initiateCall(peerId) {
+      const pc = createPeerConnection(peerId);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('webrtc-offer', {
+          roomCode: myRoomCode, from: myPlayerIndex, to: peerId, offer: pc.localDescription
+        });
+      } catch (err) { console.error('[webrtc] offer error:', err); }
+    }
+
+    async function handleOffer(from, offer) {
+      const pc = createPeerConnection(from);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-answer', {
+          roomCode: myRoomCode, from: myPlayerIndex, to: from, answer: pc.localDescription
+        });
+      } catch (err) { console.error('[webrtc] answer error:', err); }
+    }
+
+    async function handleAnswer(from, answer) {
+      const pc = peerConnections[from];
+      if (pc) {
+        try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); }
+        catch (err) { console.error('[webrtc] set answer error:', err); }
+      }
+    }
+
+    async function handleIceCandidate(from, candidate) {
+      const pc = peerConnections[from];
+      if (pc) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+        catch (err) { /* ICE candidate errors are non-fatal */ }
+      }
+    }
+
+    function cleanupWebRTC() {
+      Object.values(peerConnections).forEach(pc => pc.close());
+      Object.keys(peerConnections).forEach(k => delete peerConnections[k]);
+      Object.keys(remoteStreams).forEach(k => delete remoteStreams[k]);
+      updateRemoteVideoUI();
+    }
+
+    function updateRemoteVideoUI() {
+      const bar = document.getElementById('remote-videos-bar');
+      if (!bar) return;
+      bar.innerHTML = '';
+      for (const [peerId, stream] of Object.entries(remoteStreams)) {
+        if (peerId === 'host') continue;
+        const idx = parseInt(peerId, 10);
+        if (isNaN(idx) || idx === myPlayerIndex) continue;
+        const color = PLAYER_COLORS_CSS[idx] || '#0ff';
+        const circle = document.createElement('div');
+        circle.className = 'remote-video-circle';
+        circle.style.setProperty('--player-color', color);
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        circle.appendChild(video);
+        bar.appendChild(circle);
+      }
+    }
+
+    // --- WebRTC Socket Listeners ---
+    socket.on('webrtc-offer', ({ from, offer }) => handleOffer(from, offer));
+    socket.on('webrtc-answer', ({ from, answer }) => handleAnswer(from, answer));
+    socket.on('webrtc-ice-candidate', ({ from, candidate }) => handleIceCandidate(from, candidate));
+    socket.on('webrtc-ready', ({ playerIndex }) => {
+      if (myPlayerIndex !== null && myPlayerIndex < playerIndex) {
+        initiateCall(playerIndex);
+      }
+    });
+
     // Pre-fill room code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
@@ -402,6 +650,10 @@
         const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
         document.getElementById('lives-display').textContent = heartsStr;
         requestWakeLock();
+        // Re-establish WebRTC after rejoin
+        cleanupWebRTC();
+        initiateCall('host');
+        socket.emit('webrtc-ready', { roomCode: myRoomCode, playerIndex: myPlayerIndex });
       } else {
         // Back to lobby
         const colorEl = document.getElementById('player-color');
@@ -469,6 +721,12 @@
       const cssClasses = ['cyan', 'magenta', 'yellow', 'green'];
       colorEl.textContent = colors[playerIndex] || colors[0];
       colorEl.className = cssClasses[playerIndex] || cssClasses[0];
+
+      // Update video circle border color & init camera
+      const myColor = PLAYER_COLORS_CSS[playerIndex] || '#0ff';
+      document.getElementById('local-video-circle').style.setProperty('--player-color', myColor);
+      initCamera();
+
       showScreen('ready-screen');
     });
 
@@ -507,6 +765,11 @@
       showScreen('controls-screen');
       requestWakeLock();
       startInputHeartbeat();
+      // Start WebRTC connections
+      if (localStream || true) { // Always try — even without local stream we can receive
+        initiateCall('host');
+        socket.emit('webrtc-ready', { roomCode: myRoomCode, playerIndex: myPlayerIndex });
+      }
     });
 
     // --- Touch Controls ---
@@ -661,6 +924,7 @@
 
     socket.on('back-to-lobby', ({ playerList }) => {
       stopInputHeartbeat();
+      cleanupWebRTC();
       document.getElementById('victory-overlay').style.display = 'none';
       document.getElementById('gameover-overlay').style.display = 'none';
       document.getElementById('ready-btn').classList.remove('pressed');
@@ -680,6 +944,8 @@
     });
 
     socket.on('room-closed', () => {
+      cleanupWebRTC();
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       sessionStorage.removeItem('coop_roomCode');
       sessionStorage.removeItem('coop_playerIndex');
       alert('Host disconnected. Room closed.');

@@ -61,6 +61,16 @@ function buildPlayerList(room) {
   }));
 }
 
+function resolveTargetSocket(room, target) {
+  if (target === 'host') return room.hostSocketId;
+  if (typeof target === 'number') {
+    for (const [sid, player] of room.players) {
+      if (player.playerIndex === target) return sid;
+    }
+  }
+  return null;
+}
+
 // --- Socket.io ---
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
@@ -507,6 +517,34 @@ io.on('connection', (socket) => {
 
     const playerList = buildPlayerList(room);
     io.to(roomCode).emit('back-to-lobby', { playerList });
+  });
+
+  // --- WebRTC Signaling ---
+  socket.on('webrtc-offer', ({ roomCode, from, to, offer }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const targetSid = resolveTargetSocket(room, to);
+    if (targetSid) io.to(targetSid).emit('webrtc-offer', { from, offer });
+  });
+
+  socket.on('webrtc-answer', ({ roomCode, from, to, answer }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const targetSid = resolveTargetSocket(room, to);
+    if (targetSid) io.to(targetSid).emit('webrtc-answer', { from, answer });
+  });
+
+  socket.on('webrtc-ice-candidate', ({ roomCode, from, to, candidate }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const targetSid = resolveTargetSocket(room, to);
+    if (targetSid) io.to(targetSid).emit('webrtc-ice-candidate', { from, candidate });
+  });
+
+  socket.on('webrtc-ready', ({ roomCode, playerIndex }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    socket.to(roomCode).emit('webrtc-ready', { playerIndex });
   });
 
   // Disconnect

@@ -504,6 +504,53 @@
     #disconnect-overlay h2 { color: #f44; text-shadow: 0 0 15px #f44; font-size: 2rem; }
     #disconnect-overlay p { color: #888; animation: pulse 2s ease-in-out infinite; }
 
+    /* --- Video Chat Overlay --- */
+    #video-overlay {
+      display: none;
+      position: fixed;
+      top: 48px;
+      left: 16px;
+      z-index: 499;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .host-video-circle {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid var(--player-color, #0ff);
+      box-shadow: 0 0 10px var(--player-color, rgba(0,255,255,0.4));
+      background: #111;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .host-video-circle video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .host-video-circle .fallback-face {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      background: #111;
+    }
+    .host-video-label {
+      position: absolute;
+      bottom: -14px; left: 0; right: 0;
+      text-align: center;
+      font-size: 0.55rem;
+      font-family: 'Courier New', monospace;
+      color: var(--player-color, #0ff);
+      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* --- Credits Footer --- */
     .credits-footer {
       position: relative;
@@ -689,6 +736,9 @@
     <div id="hud-players"></div>
   </div>
 
+  <!-- Video Chat Overlay (shown during gameplay) -->
+  <div id="video-overlay"></div>
+
   <!-- Sound Toggle Button -->
   <button id="sound-toggle-btn" onclick="const on=window.toggleSound(); this.textContent=on?'&#x1F50A;':'&#x1F507;';">&#x1F50A;</button>
 
@@ -733,12 +783,109 @@
     let lastLocalIP = null;
     let lastPort = null;
 
+    // --- WebRTC State (Host — receive-only) ---
+    const hostPeerConnections = {};
+    const hostRemoteStreams = {};
+    const PLAYER_COLORS_CSS_HOST = ['#0ff', '#f0f', '#ff0', '#0f0'];
+    const FACE_EMOJIS_HOST = {
+      smiley: '\u{1F60A}', crazy: '\u{1F92A}', angry: '\u{1F620}',
+      cool: '\u{1F60E}', wink: '\u{1F61C}', skull: '\u{1F480}'
+    };
+    const HOST_ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    function hostCreatePeerConnection(playerIndex) {
+      if (hostPeerConnections[playerIndex]) hostPeerConnections[playerIndex].close();
+      const pc = new RTCPeerConnection(HOST_ICE_CONFIG);
+      hostPeerConnections[playerIndex] = pc;
+      // Host is receive-only — no local tracks
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('webrtc-ice-candidate', {
+            roomCode: currentRoomCode, from: 'host', to: playerIndex, candidate: event.candidate
+          });
+        }
+      };
+      pc.ontrack = (event) => {
+        hostRemoteStreams[playerIndex] = event.streams[0];
+        updateHostVideoOverlay();
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          delete hostRemoteStreams[playerIndex];
+          updateHostVideoOverlay();
+        }
+      };
+      return pc;
+    }
+
+    async function hostHandleOffer(from, offer) {
+      const pc = hostCreatePeerConnection(from);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-answer', {
+          roomCode: currentRoomCode, from: 'host', to: from, answer: pc.localDescription
+        });
+      } catch (err) { console.error('[webrtc-host] offer error:', err); }
+    }
+
+    async function hostHandleIceCandidate(from, candidate) {
+      const pc = hostPeerConnections[from];
+      if (pc) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+        catch (err) { /* non-fatal */ }
+      }
+    }
+
+    function hostCleanupWebRTC() {
+      Object.values(hostPeerConnections).forEach(pc => pc.close());
+      Object.keys(hostPeerConnections).forEach(k => delete hostPeerConnections[k]);
+      Object.keys(hostRemoteStreams).forEach(k => delete hostRemoteStreams[k]);
+      updateHostVideoOverlay();
+    }
+
+    function updateHostVideoOverlay() {
+      const overlay = document.getElementById('video-overlay');
+      if (!overlay) return;
+      overlay.innerHTML = '';
+      const isGameActive = document.getElementById('game-container').style.display === 'block';
+      overlay.style.display = isGameActive ? 'flex' : 'none';
+      if (!isGameActive) return;
+      for (let i = 0; i < selectedPlayerCount; i++) {
+        const color = PLAYER_COLORS_CSS_HOST[i];
+        const name = playerNames[i] || '\u{1F916} AI';
+        const face = playerFaces[i] || 'smiley';
+        const stream = hostRemoteStreams[i];
+        const circle = document.createElement('div');
+        circle.className = 'host-video-circle';
+        circle.style.setProperty('--player-color', color);
+        if (stream) {
+          const video = document.createElement('video');
+          video.autoplay = true; video.muted = true; video.playsInline = true;
+          video.srcObject = stream;
+          circle.appendChild(video);
+        }
+        const fallback = document.createElement('div');
+        fallback.className = 'fallback-face';
+        fallback.textContent = stream ? '' : (FACE_EMOJIS_HOST[face] || '\u{1F60A}');
+        fallback.style.display = stream ? 'none' : 'flex';
+        circle.appendChild(fallback);
+        const label = document.createElement('div');
+        label.className = 'host-video-label';
+        label.textContent = name;
+        circle.appendChild(label);
+        overlay.appendChild(circle);
+      }
+    }
+
     // --- HUD helpers ---
     function showGameHUD(roomCode) {
       const hud = document.getElementById('game-hud-overlay');
       hud.style.display = 'flex';
       document.getElementById('hud-room-code').textContent = `ROOM ${roomCode}`;
       renderHUDPlayers();
+      updateHostVideoOverlay();
       const soundBtn = document.getElementById('sound-toggle-btn');
       soundBtn.style.display = 'block';
       soundBtn.textContent = window._soundEnabled ? '\u{1F50A}' : '\u{1F507}';
@@ -746,6 +893,7 @@
     function hideGameHUD() {
       document.getElementById('game-hud-overlay').style.display = 'none';
       document.getElementById('sound-toggle-btn').style.display = 'none';
+      document.getElementById('video-overlay').style.display = 'none';
     }
     function renderHUDPlayers() {
       const container = document.getElementById('hud-players');
@@ -1149,6 +1297,14 @@
       document.getElementById('viewer-join-error').textContent = message;
     });
 
+    // --- WebRTC Signaling (Host receives) ---
+    socket.on('webrtc-offer', ({ from, offer }) => hostHandleOffer(from, offer));
+    socket.on('webrtc-answer', ({ from, answer }) => {
+      const pc = hostPeerConnections[from];
+      if (pc) pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
+    });
+    socket.on('webrtc-ice-candidate', ({ from, candidate }) => hostHandleIceCandidate(from, candidate));
+
     // Game start — handles both host and viewer modes
     socket.on('game-start', ({ level, lives, playerCount, humanPlayers, faces }) => {
       if (typeof initAudio === 'function') initAudio();
@@ -1208,6 +1364,7 @@
 
     // Back to lobby — handles both host and viewer modes
     socket.on('back-to-lobby', ({ playerList }) => {
+      hostCleanupWebRTC();
       document.getElementById('disconnect-overlay').style.display = 'none';
       hideGameHUD();
       showScreen('qr-screen');
