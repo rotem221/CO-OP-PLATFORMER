@@ -1049,6 +1049,9 @@ class ViewerGameScene extends Phaser.Scene {
       fontFamily: 'Courier New', fontSize: '12px', color: '#555',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(250);
 
+    // Clean up listeners on scene shutdown
+    this.events.once('shutdown', this.shutdown, this);
+
     // --- Socket listeners for state ---
     if (this._socket) {
       this._socket.off('game-state-update');
@@ -1133,10 +1136,17 @@ class ViewerGameScene extends Phaser.Scene {
         this.time.delayedCall(1500, () => { this.scene.start('VictoryScene'); });
       });
 
-      this._socket.off('retry-level');
-      this._socket.on('retry-level', ({ level, lives, score }) => {
-        this.scene.restart({ level, lives, score, playerCount: this.playerCount, humanPlayers: this.humanPlayers });
-      });
+    }
+  }
+
+  // Clean up socket listeners when scene shuts down
+  shutdown() {
+    if (this._socket) {
+      this._socket.off('game-state-update');
+      this._socket.off('lives-update');
+      this._socket.off('level-transition');
+      this._socket.off('game-over-lives');
+      this._socket.off('game-victory');
     }
   }
 
@@ -1297,19 +1307,30 @@ class GameOverScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // TRY AGAIN (host only — viewers see "waiting" message)
+    // Buttons (host only — viewers see "waiting" message)
     if (this.game._isViewer) {
       this.add.text(640, 460, 'Waiting for host...', {
         fontFamily: 'Courier New', fontSize: '18px', color: '#555',
       }).setOrigin(0.5);
     } else {
-      const retryBg = this.add.rectangle(640, 460, 260, 56, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
-      this.add.rectangle(640, 460, 260, 56).setStrokeStyle(2, 0xff0044);
-      this.add.text(640, 460, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#ff0044' }).setOrigin(0.5);
+      // TRY AGAIN (same level)
+      const retryBg = this.add.rectangle(640, 440, 260, 50, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
+      this.add.rectangle(640, 440, 260, 50).setStrokeStyle(2, 0xff0044);
+      this.add.text(640, 440, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '20px', color: '#ff0044' }).setOrigin(0.5);
       retryBg.on('pointerover', () => retryBg.setFillStyle(0xff0044, 0.3));
       retryBg.on('pointerout', () => retryBg.setFillStyle(0xff0044, 0.15));
       retryBg.on('pointerdown', () => {
         if (this._socket && this._roomCode) this._socket.emit('try-again', { roomCode: this._roomCode });
+      });
+
+      // RESTART FROM LEVEL 1
+      const restartBg = this.add.rectangle(640, 510, 260, 50, 0xffaa00, 0.15).setInteractive({ useHandCursor: true });
+      this.add.rectangle(640, 510, 260, 50).setStrokeStyle(2, 0xffaa00);
+      this.add.text(640, 510, 'RESTART', { fontFamily: 'Courier New', fontSize: '20px', color: '#ffaa00' }).setOrigin(0.5);
+      restartBg.on('pointerover', () => restartBg.setFillStyle(0xffaa00, 0.3));
+      restartBg.on('pointerout', () => restartBg.setFillStyle(0xffaa00, 0.15));
+      restartBg.on('pointerdown', () => {
+        if (this._socket && this._roomCode) this._socket.emit('restart-game', { roomCode: this._roomCode });
       });
     }
 

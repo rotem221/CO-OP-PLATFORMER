@@ -352,7 +352,7 @@ io.on('connection', (socket) => {
     console.log(`[victory] room ${roomCode} (score: ${room.score}, lives: ${room.lives})`);
   });
 
-  // Try again (after game over)
+  // Try again (after game over — same level)
   socket.on('try-again', ({ roomCode }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
@@ -368,6 +368,25 @@ io.on('connection', (socket) => {
       score: 0,
     });
     console.log(`[retry] room ${roomCode} at level ${room.currentLevel}`);
+  });
+
+  // Restart game (after game over — from level 1)
+  socket.on('restart-game', ({ roomCode }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.lives = 3;
+    room.score = 0;
+    room.currentLevel = 1;
+    room.gameState = 'playing';
+    room.levelStartTime = Date.now();
+
+    io.to(roomCode).emit('retry-level', {
+      level: 1,
+      lives: 3,
+      score: 0,
+    });
+    console.log(`[restart] room ${roomCode} from level 1`);
   });
 
   // Play again (back to lobby after victory)
