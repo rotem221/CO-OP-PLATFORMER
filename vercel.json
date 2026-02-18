@@ -1,7 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "buildCommand": "cp public/index.html public/controller.html public/game.js .",
-  "outputDirectory": ".",
-  "framework": null
-}
