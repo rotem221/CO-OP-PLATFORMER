@@ -165,6 +165,16 @@ io.on('connection', (socket) => {
     console.log(`[player-count] room ${roomCode} → ${room.playerCount} players`);
   });
 
+  // Host sets start level (1-9)
+  socket.on('set-start-level', ({ roomCode, startLevel }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.gameState !== 'lobby') return;
+
+    room.startLevel = Math.max(1, Math.min(9, startLevel));
+    console.log(`[start-level] room ${roomCode} → level ${room.startLevel}`);
+  });
+
   // Controller joins a room
   socket.on('player-join', ({ roomCode, nickname }) => {
     const room = rooms.get(roomCode);
@@ -270,8 +280,9 @@ io.on('connection', (socket) => {
       [...room.players.values()].every(p => p.ready);
 
     if (allReady) {
+      const startLvl = room.startLevel || 1;
       room.gameState = 'playing';
-      room.currentLevel = 1;
+      room.currentLevel = startLvl;
       room.lives = 3;
       room.score = 0;
       room.levelStartTime = Date.now();
@@ -286,7 +297,7 @@ io.on('connection', (socket) => {
       }
 
       io.to(roomCode).emit('game-start', {
-        level: 1,
+        level: startLvl,
         lives: 3,
         playerCount: room.playerCount,
         humanPlayers,

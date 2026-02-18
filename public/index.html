@@ -104,6 +104,7 @@
       text-shadow: 0 0 8px #0ff;
     }
     .pc-btn:hover { border-color: #0ff; }
+    #level-select-row .pc-btn { width: 40px; height: 36px; font-size: 0.95rem; }
 
     /* Lobby section */
     #qr-screen .lobby-section {
@@ -229,6 +230,21 @@
     }
     #back-to-host-btn:hover { color: #888; border-color: #555; }
 
+    /* --- Sound Toggle --- */
+    #sound-toggle-btn {
+      display: none;
+      position: fixed; bottom: 16px; right: 16px;
+      z-index: 600;
+      width: 44px; height: 44px;
+      font-size: 1.4rem;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid #333;
+      border-radius: 50%;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
     /* --- Game HUD Overlay --- */
     #game-hud-overlay {
       display: none;
@@ -302,6 +318,22 @@
       <span id="ai-hint" style="color:#555; font-size:0.75rem;">Empty slots filled by 🤖 AI</span>
     </div>
 
+    <!-- Level selector -->
+    <div id="level-select-section" style="display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:6px;">
+      <span style="color:#888; font-size:0.8rem;">START LEVEL</span>
+      <div class="player-count-row" id="level-select-row">
+        <button class="pc-btn active" data-level="1">1</button>
+        <button class="pc-btn" data-level="2">2</button>
+        <button class="pc-btn" data-level="3">3</button>
+        <button class="pc-btn" data-level="4">4</button>
+        <button class="pc-btn" data-level="5">5</button>
+        <button class="pc-btn" data-level="6">6</button>
+        <button class="pc-btn" data-level="7">7</button>
+        <button class="pc-btn" data-level="8">8</button>
+        <button class="pc-btn" data-level="9">9</button>
+      </div>
+    </div>
+
     <!-- Join a Game button (for remote viewers) -->
     <button id="join-game-btn">JOIN A GAME</button>
 
@@ -354,6 +386,9 @@
     <div id="hud-players"></div>
   </div>
 
+  <!-- Sound Toggle Button -->
+  <button id="sound-toggle-btn" onclick="const on=window.toggleSound(); this.textContent=on?'🔊':'🔇';">🔊</button>
+
   <!-- Disconnect Overlay -->
   <div id="disconnect-overlay">
     <h2>PLAYER DISCONNECTED</h2>
@@ -373,6 +408,7 @@
     let playerNames = {};
     let playerFaces = {};
     let selectedPlayerCount = 2;
+    let selectedStartLevel = 1;
     let lastLocalIP = null;
     let lastPort = null;
 
@@ -382,9 +418,13 @@
       hud.style.display = 'flex';
       document.getElementById('hud-room-code').textContent = `ROOM ${roomCode}`;
       renderHUDPlayers();
+      const soundBtn = document.getElementById('sound-toggle-btn');
+      soundBtn.style.display = 'block';
+      soundBtn.textContent = window._soundEnabled ? '🔊' : '🔇';
     }
     function hideGameHUD() {
       document.getElementById('game-hud-overlay').style.display = 'none';
+      document.getElementById('sound-toggle-btn').style.display = 'none';
     }
     function renderHUDPlayers() {
       const container = document.getElementById('hud-players');
@@ -497,7 +537,7 @@
     });
 
     // --- Player count selector ---
-    document.querySelectorAll('.pc-btn').forEach(btn => {
+    document.querySelectorAll('.pc-btn[data-count]').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedPlayerCount = parseInt(btn.dataset.count);
         updatePlayerCountUI();
@@ -508,7 +548,7 @@
     });
 
     function updatePlayerCountUI() {
-      document.querySelectorAll('.pc-btn').forEach(b => {
+      document.querySelectorAll('.pc-btn[data-count]').forEach(b => {
         b.classList.toggle('active', parseInt(b.dataset.count) === selectedPlayerCount);
       });
       // Show/hide slot divs
@@ -538,6 +578,19 @@
         }
       }
     }
+
+    // --- Level selector ---
+    document.querySelectorAll('.pc-btn[data-level]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedStartLevel = parseInt(btn.dataset.level);
+        document.querySelectorAll('.pc-btn[data-level]').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.level) === selectedStartLevel);
+        });
+        if (currentRoomCode) {
+          socket.emit('set-start-level', { roomCode: currentRoomCode, startLevel: selectedStartLevel });
+        }
+      });
+    });
 
     // Server broadcasts player count changes
     socket.on('player-count-update', ({ playerCount }) => {
@@ -649,6 +702,7 @@
     // Elements to hide/show when switching modes
     const hostElements = ['qr-box', 'room-code-display', 'new-code-btn', 'sound-hint', 'initial-waiting'];
     const playerCountSection = document.querySelector('.player-count-row').parentElement;
+    const levelSelectSection = document.getElementById('level-select-section');
 
     document.getElementById('join-game-btn').addEventListener('click', () => {
       // Hide host-specific elements
@@ -657,6 +711,7 @@
         if (el) el.style.display = 'none';
       });
       playerCountSection.style.display = 'none';
+      levelSelectSection.style.display = 'none';
       document.getElementById('lobby-section').classList.add('hidden');
 
       // Show viewer join form
@@ -676,6 +731,7 @@
         if (el && id !== 'initial-waiting') el.style.display = '';
       });
       playerCountSection.style.display = '';
+      levelSelectSection.style.display = '';
       if (currentRoomCode) {
         document.getElementById('initial-waiting').style.display = 'none';
         document.getElementById('lobby-section').classList.remove('hidden');

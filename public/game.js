@@ -18,6 +18,12 @@ function getPlayerTexture(index, face) {
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
 let audioResumed = false;
+window._soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+window.toggleSound = function() {
+  window._soundEnabled = !window._soundEnabled;
+  localStorage.setItem('soundEnabled', window._soundEnabled);
+  return window._soundEnabled;
+};
 
 function initAudio() {
   if (!audioCtx) { audioCtx = new AudioCtx(); }
@@ -37,6 +43,7 @@ document.addEventListener('touchstart', resumeAudioOnGesture, { once: false });
 document.addEventListener('keydown', resumeAudioOnGesture, { once: false });
 
 function playSound(type) {
+  if (!window._soundEnabled) return;
   if (!audioCtx) initAudio();
   if (!audioCtx || audioCtx.state === 'suspended') {
     if (audioCtx) audioCtx.resume().catch(() => {});
@@ -500,6 +507,254 @@ const LEVELS = {
       { x: 2050, y: 500 },
       { x: 3300, y: 500 },
       { x: 4400, y: 500 },
+    ],
+  },
+
+  7: {
+    name: 'GAUNTLET',
+    theme: 'cyan',
+    width: 3800,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 3600, y: 268 },
+    platforms: [
+      { x: 400, y: 700, w: 800, h: 32 },
+      { x: 1050, y: 700, w: 100, h: 32 },
+      { x: 1300, y: 700, w: 300, h: 32 },
+      { x: 1800, y: 700, w: 200, h: 32 },
+      { x: 2200, y: 700, w: 400, h: 32 },
+      { x: 2800, y: 700, w: 200, h: 32 },
+      { x: 3200, y: 700, w: 400, h: 32 },
+      { x: 3700, y: 700, w: 400, h: 32 },
+      { x: 300, y: 610, w: 140, h: 20 },
+      { x: 550, y: 530, w: 140, h: 20 },
+      { x: 300, y: 450, w: 140, h: 20 },
+      { x: 550, y: 370, w: 140, h: 20 },
+      { x: 1300, y: 600, w: 120, h: 20 },
+      { x: 1550, y: 520, w: 120, h: 20 },
+      { x: 1800, y: 600, w: 120, h: 20 },
+      { x: 2200, y: 560, w: 140, h: 20 },
+      { x: 2600, y: 500, w: 120, h: 20 },
+      { x: 2800, y: 580, w: 120, h: 20 },
+      { x: 3450, y: 610, w: 160, h: 20 },
+      { x: 3600, y: 530, w: 160, h: 20 },
+      { x: 3450, y: 450, w: 160, h: 20 },
+      { x: 3600, y: 370, w: 160, h: 20 },
+      { x: 3600, y: 300, w: 180, h: 20 },
+    ],
+    spikes: [
+      { x: 500, y: 688, w: 60, h: 16 },
+      { x: 1050, y: 688, w: 50, h: 16 },
+      { x: 1800, y: 688, w: 60, h: 16 },
+      { x: 2500, y: 688, w: 50, h: 16 },
+      { x: 3000, y: 688, w: 60, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 700,  y: 672, w: 64, h: 24, id: 'plateN',  opensGate: 'gateN' },
+      { x: 1500, y: 672, w: 64, h: 24, id: 'plateO',  opensGate: 'gateO' },
+      { x: 2400, y: 672, w: 64, h: 24, id: 'plateO2', opensGate: 'gateO' },
+    ],
+    gates: [
+      { x: 1000, y: 634, w: 24, h: 132, id: 'gateN' },
+      { x: 2700, y: 634, w: 24, h: 132, id: 'gateO' },
+    ],
+    movingPlatforms: [
+      { x: 1100, y: 560, w: 110, h: 20, moveX: 110, moveY: 0, speed: 70 },
+      { x: 2000, y: 540, w: 110, h: 20, moveX: 0, moveY: 100, speed: 60 },
+      { x: 3050, y: 560, w: 110, h: 20, moveX: 120, moveY: 0, speed: 75 },
+    ],
+    lasers: [
+      { x: 800,  y: 480, w: 6, h: 240, onTime: 1400, offTime: 1200 },
+      { x: 1600, y: 420, w: 6, h: 300, onTime: 1200, offTime: 1400 },
+      { x: 2300, y: 460, w: 6, h: 260, onTime: 1300, offTime: 1100 },
+      { x: 3100, y: 440, w: 6, h: 280, onTime: 1100, offTime: 1300 },
+    ],
+    hearts: [
+      { x: 550, y: 500 },
+      { x: 2200, y: 520 },
+      { x: 3050, y: 540 },
+    ],
+  },
+
+  8: {
+    name: 'LABYRINTH',
+    theme: 'purple',
+    width: 4800,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 4600, y: 268 },
+    platforms: [
+      { x: 400, y: 700, w: 800, h: 32 },
+      { x: 1100, y: 700, w: 100, h: 32 },
+      { x: 1400, y: 700, w: 400, h: 32 },
+      { x: 2000, y: 700, w: 300, h: 32 },
+      { x: 2500, y: 700, w: 400, h: 32 },
+      { x: 3100, y: 700, w: 200, h: 32 },
+      { x: 3500, y: 700, w: 400, h: 32 },
+      { x: 4100, y: 700, w: 200, h: 32 },
+      { x: 4500, y: 700, w: 600, h: 32 },
+      { x: 300, y: 620, w: 140, h: 20 },
+      { x: 550, y: 540, w: 140, h: 20 },
+      { x: 300, y: 460, w: 140, h: 20 },
+      { x: 550, y: 380, w: 140, h: 20 },
+      { x: 1400, y: 600, w: 140, h: 20 },
+      { x: 1700, y: 520, w: 120, h: 20 },
+      { x: 2000, y: 600, w: 140, h: 20 },
+      { x: 2300, y: 520, w: 120, h: 20 },
+      { x: 2700, y: 580, w: 140, h: 20 },
+      { x: 3000, y: 500, w: 120, h: 20 },
+      { x: 3500, y: 580, w: 140, h: 20 },
+      { x: 3800, y: 500, w: 120, h: 20 },
+      { x: 4100, y: 580, w: 140, h: 20 },
+      { x: 4400, y: 610, w: 160, h: 20 },
+      { x: 4600, y: 530, w: 160, h: 20 },
+      { x: 4400, y: 450, w: 160, h: 20 },
+      { x: 4600, y: 370, w: 160, h: 20 },
+      { x: 4600, y: 300, w: 180, h: 20 },
+    ],
+    spikes: [
+      { x: 500, y: 688, w: 60, h: 16 },
+      { x: 1400, y: 688, w: 80, h: 16 },
+      { x: 2200, y: 688, w: 60, h: 16 },
+      { x: 3000, y: 688, w: 60, h: 16 },
+      { x: 3800, y: 688, w: 80, h: 16 },
+      { x: 4300, y: 688, w: 60, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 600,  y: 672, w: 64, h: 24, id: 'plateP',  opensGate: 'gateP' },
+      { x: 1200, y: 672, w: 64, h: 24, id: 'plateP2', opensGate: 'gateP' },
+      { x: 1800, y: 672, w: 64, h: 24, id: 'plateQ',  opensGate: 'gateQ' },
+      { x: 2600, y: 672, w: 64, h: 24, id: 'plateR',  opensGate: 'gateR' },
+    ],
+    gates: [
+      { x: 1050, y: 634, w: 24, h: 132, id: 'gateP' },
+      { x: 2400, y: 634, w: 24, h: 132, id: 'gateQ' },
+      { x: 3400, y: 634, w: 24, h: 132, id: 'gateR' },
+    ],
+    movingPlatforms: [
+      { x: 1200, y: 560, w: 110, h: 20, moveX: 120, moveY: 0, speed: 65 },
+      { x: 1900, y: 520, w: 100, h: 20, moveX: 0, moveY: 110, speed: 55 },
+      { x: 2800, y: 560, w: 110, h: 20, moveX: 130, moveY: 0, speed: 70 },
+      { x: 3300, y: 520, w: 100, h: 20, moveX: 0, moveY: 120, speed: 60 },
+      { x: 4000, y: 560, w: 110, h: 20, moveX: 120, moveY: 0, speed: 75 },
+    ],
+    lasers: [
+      { x: 800,  y: 460, w: 6, h: 260, onTime: 1300, offTime: 1200 },
+      { x: 1500, y: 400, w: 6, h: 320, onTime: 1100, offTime: 1300 },
+      { x: 2100, y: 440, w: 6, h: 280, onTime: 1200, offTime: 1100 },
+      { x: 3200, y: 420, w: 6, h: 300, onTime: 1000, offTime: 1200 },
+      { x: 3900, y: 450, w: 6, h: 270, onTime: 1100, offTime: 1000 },
+    ],
+    hearts: [
+      { x: 550, y: 500 },
+      { x: 1700, y: 480 },
+      { x: 3000, y: 460 },
+      { x: 4100, y: 540 },
+    ],
+  },
+
+  9: {
+    name: 'INFERNO',
+    theme: 'fire',
+    width: 5500,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 5300, y: 268 },
+    platforms: [
+      { x: 400, y: 700, w: 800, h: 32 },
+      { x: 1100, y: 700, w: 100, h: 32 },
+      { x: 1400, y: 700, w: 300, h: 32 },
+      { x: 1900, y: 700, w: 200, h: 32 },
+      { x: 2300, y: 700, w: 400, h: 32 },
+      { x: 2900, y: 700, w: 200, h: 32 },
+      { x: 3300, y: 700, w: 300, h: 32 },
+      { x: 3800, y: 700, w: 200, h: 32 },
+      { x: 4200, y: 700, w: 300, h: 32 },
+      { x: 4700, y: 700, w: 200, h: 32 },
+      { x: 5100, y: 700, w: 600, h: 32 },
+      { x: 300, y: 620, w: 140, h: 20 },
+      { x: 550, y: 540, w: 140, h: 20 },
+      { x: 300, y: 460, w: 140, h: 20 },
+      { x: 550, y: 380, w: 140, h: 20 },
+      { x: 1400, y: 600, w: 120, h: 20 },
+      { x: 1650, y: 520, w: 120, h: 20 },
+      { x: 1900, y: 600, w: 120, h: 20 },
+      { x: 2300, y: 560, w: 140, h: 20 },
+      { x: 2700, y: 500, w: 120, h: 20 },
+      { x: 2900, y: 580, w: 120, h: 20 },
+      { x: 3300, y: 560, w: 120, h: 20 },
+      { x: 3600, y: 480, w: 120, h: 20 },
+      { x: 3800, y: 560, w: 120, h: 20 },
+      { x: 4200, y: 560, w: 140, h: 20 },
+      { x: 4500, y: 480, w: 120, h: 20 },
+      { x: 4700, y: 560, w: 120, h: 20 },
+      { x: 5100, y: 610, w: 160, h: 20 },
+      { x: 5300, y: 530, w: 160, h: 20 },
+      { x: 5100, y: 450, w: 160, h: 20 },
+      { x: 5300, y: 370, w: 160, h: 20 },
+      { x: 5300, y: 300, w: 180, h: 20 },
+    ],
+    spikes: [
+      { x: 500, y: 688, w: 80, h: 16 },
+      { x: 1400, y: 688, w: 60, h: 16 },
+      { x: 2100, y: 688, w: 80, h: 16 },
+      { x: 2900, y: 688, w: 60, h: 16 },
+      { x: 3600, y: 688, w: 80, h: 16 },
+      { x: 4400, y: 688, w: 60, h: 16 },
+      { x: 4900, y: 688, w: 80, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 600,  y: 672, w: 64, h: 24, id: 'plateS',  opensGate: 'gateS' },
+      { x: 1200, y: 672, w: 64, h: 24, id: 'plateS2', opensGate: 'gateS' },
+      { x: 1800, y: 672, w: 64, h: 24, id: 'plateT',  opensGate: 'gateT' },
+      { x: 2600, y: 672, w: 64, h: 24, id: 'plateT2', opensGate: 'gateT' },
+      { x: 3400, y: 672, w: 64, h: 24, id: 'plateU',  opensGate: 'gateU' },
+      { x: 4300, y: 672, w: 64, h: 24, id: 'plateV',  opensGate: 'gateV' },
+    ],
+    gates: [
+      { x: 1050, y: 634, w: 24, h: 132, id: 'gateS' },
+      { x: 2200, y: 634, w: 24, h: 132, id: 'gateT' },
+      { x: 3700, y: 634, w: 24, h: 132, id: 'gateU' },
+      { x: 4600, y: 634, w: 24, h: 132, id: 'gateV' },
+    ],
+    movingPlatforms: [
+      { x: 1200, y: 560, w: 100, h: 20, moveX: 120, moveY: 0, speed: 75 },
+      { x: 1700, y: 520, w: 100, h: 20, moveX: 0, moveY: 110, speed: 65 },
+      { x: 2500, y: 560, w: 100, h: 20, moveX: 130, moveY: 0, speed: 70 },
+      { x: 3100, y: 520, w: 100, h: 20, moveX: 0, moveY: 120, speed: 60 },
+      { x: 3900, y: 560, w: 100, h: 20, moveX: 120, moveY: 0, speed: 80 },
+      { x: 4500, y: 520, w: 100, h: 20, moveX: 0, moveY: 110, speed: 70 },
+      { x: 5000, y: 560, w: 100, h: 20, moveX: 100, moveY: 0, speed: 75 },
+    ],
+    lasers: [
+      { x: 800,  y: 440, w: 6, h: 280, onTime: 1200, offTime: 1100 },
+      { x: 1500, y: 380, w: 6, h: 340, onTime: 1000, offTime: 1200 },
+      { x: 2100, y: 420, w: 6, h: 300, onTime: 1100, offTime: 1000 },
+      { x: 3000, y: 400, w: 6, h: 320, onTime: 900,  offTime: 1100 },
+      { x: 3800, y: 430, w: 6, h: 290, onTime: 1000, offTime: 900 },
+      { x: 4600, y: 410, w: 6, h: 310, onTime: 900,  offTime: 1000 },
+    ],
+    hearts: [
+      { x: 550, y: 500 },
+      { x: 1650, y: 480 },
+      { x: 2700, y: 460 },
+      { x: 3600, y: 440 },
+      { x: 4500, y: 480 },
     ],
   },
 };
@@ -1025,6 +1280,8 @@ class GameScene extends Phaser.Scene {
           plates: pressedPlates,
           gates: openGates,
           collectedHearts: [...this.collectedHearts],
+          lasers: this.laserObjects.map(l => l.active),
+          movPlats: this.movingPlatformObjects.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })),
         });
       }
     }
@@ -1257,7 +1514,7 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    if (this.currentLevel < 6) {
+    if (this.currentLevel < 9) {
       const nextLevel = this.currentLevel + 1;
       if (this._socket && this._roomCode) {
         this._socket.emit('level-complete', { roomCode: this._roomCode, nextLevel, levelTime });
@@ -1538,6 +1795,28 @@ class ViewerGameScene extends Phaser.Scene {
             }
           });
         }
+        // Sync lasers from host
+        if (data.lasers && this.laserObjects) {
+          data.lasers.forEach((isOn, i) => {
+            const laser = this.laserObjects[i];
+            if (!laser) return;
+            const glow = laser.getData('glow');
+            if (isOn) {
+              laser.setVisible(true).setAlpha(0.85);
+              if (glow) { glow.setVisible(true); glow.setAlpha(0.12); }
+            } else {
+              laser.setVisible(false);
+              if (glow) glow.setVisible(false);
+            }
+          });
+        }
+        // Sync moving platforms from host
+        if (data.movPlats && this.movingPlatformObjects) {
+          data.movPlats.forEach((pos, i) => {
+            const plat = this.movingPlatformObjects[i];
+            if (plat) { plat.x = pos.x; plat.y = pos.y; }
+          });
+        }
       });
 
       this._socket.off('lives-update');
@@ -1614,30 +1893,7 @@ class ViewerGameScene extends Phaser.Scene {
       if (label && this.players[i]) label.setPosition(this.players[i].x, this.players[i].y - 36);
     });
 
-    // Moving platforms (deterministic — animate locally)
-    this.movingPlatformObjects.forEach(plat => {
-      const cfg = plat.getData('config');
-      const t = time * 0.001;
-      if (cfg.moveX) plat.x = cfg.originX + Math.sin(t * (cfg.speed / 60)) * cfg.moveX;
-      if (cfg.moveY) plat.y = cfg.originY + Math.sin(t * (cfg.speed / 60)) * cfg.moveY;
-    });
-
-    // Lasers (deterministic — animate locally)
-    this.laserObjects.forEach(laser => {
-      const cfg = laser.getData('config');
-      const cycle = cfg.onTime + cfg.offTime;
-      const phase = (time + cfg.offset) % cycle;
-      const isOn = phase < cfg.onTime;
-      const glow = laser.getData('glow');
-      if (isOn) {
-        laser.setVisible(true);
-        laser.setAlpha(0.7 + Math.sin(time * 0.015) * 0.3);
-        if (glow) { glow.setVisible(true); glow.setAlpha(0.1 + Math.sin(time * 0.01) * 0.08); }
-      } else {
-        laser.setVisible(false);
-        if (glow) glow.setVisible(false);
-      }
-    });
+    // Moving platforms & lasers: synced from host via game-state-update (no local computation)
 
     // Camera centroid
     if (this.players.length > 0) {
