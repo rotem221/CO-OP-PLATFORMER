@@ -154,6 +154,81 @@
     #game-container { display: none; width: 100vw; height: 100vh; }
     #game-container canvas { display: block; }
 
+    /* --- Join-a-Game (Viewer) --- */
+    #join-game-btn {
+      margin-top: 4px;
+      padding: 10px 24px;
+      font-size: 0.95rem;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: transparent;
+      color: #0ff;
+      border: 2px solid #0ff;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px #0ff;
+      transition: all 0.2s;
+    }
+    #join-game-btn:hover { background: rgba(0, 255, 255, 0.1); }
+
+    #viewer-join-section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-top: 16px;
+    }
+    #viewer-join-section input {
+      width: 200px;
+      padding: 14px 18px;
+      font-size: 1.4rem;
+      font-family: 'Courier New', monospace;
+      background: #111;
+      border: 2px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      text-align: center;
+      outline: none;
+      letter-spacing: 8px;
+      transition: border-color 0.3s;
+    }
+    #viewer-join-section input:focus {
+      border-color: #0ff;
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    }
+    #viewer-join-submit {
+      width: 200px;
+      padding: 14px;
+      font-size: 1.2rem;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: linear-gradient(135deg, #0ff, #08f);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 2px;
+    }
+    #viewer-join-submit:active { transform: scale(0.95); }
+    #viewer-join-error {
+      color: #f44;
+      text-shadow: 0 0 8px #f44;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    #back-to-host-btn {
+      padding: 6px 14px;
+      font-size: 0.75rem;
+      font-family: 'Courier New', monospace;
+      background: transparent;
+      color: #555;
+      border: 1px solid #333;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #back-to-host-btn:hover { color: #888; border-color: #555; }
+
     /* --- Disconnect Overlay --- */
     #disconnect-overlay {
       display: none;
@@ -189,6 +264,19 @@
         <button class="pc-btn" data-count="4">4P</button>
       </div>
       <span id="ai-hint" style="color:#555; font-size:0.75rem;">Empty slots filled by 🤖 AI</span>
+    </div>
+
+    <!-- Join a Game button (for remote viewers) -->
+    <button id="join-game-btn">JOIN A GAME</button>
+
+    <!-- Viewer join form (hidden by default) -->
+    <div id="viewer-join-section">
+      <p style="color:#888; font-size:0.85rem;">Enter the room code to watch the game</p>
+      <input type="text" id="viewer-room-code" maxlength="4" inputmode="numeric"
+             pattern="[0-9]*" placeholder="CODE" autocomplete="off">
+      <button id="viewer-join-submit">JOIN</button>
+      <div id="viewer-join-error"></div>
+      <button id="back-to-host-btn">&larr; Back to hosting</button>
     </div>
 
     <p class="waiting-text" id="initial-waiting">Waiting for players...</p>
@@ -449,26 +537,7 @@
     document.addEventListener('click', () => { if (typeof initAudio === 'function') initAudio(); }, { once: true });
     document.addEventListener('touchstart', () => { if (typeof initAudio === 'function') initAudio(); }, { once: true });
 
-    // --- Game start ---
-    socket.on('game-start', ({ level, lives, playerCount, humanPlayers }) => {
-      if (typeof initAudio === 'function') initAudio();
-      showScreen('game-container');
-
-      const pc = playerCount || selectedPlayerCount || 2;
-      const hp = humanPlayers || Object.keys(playerNames).map(Number);
-
-      if (!gameInstance) {
-        gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp);
-      } else {
-        // Update game config and restart
-        gameInstance._playerCount = pc;
-        gameInstance._humanPlayers = hp;
-        gameInstance._playerNames = playerNames;
-        gameInstance.scene.getScene('GameScene').scene.restart({
-          level: 1, lives: lives || 3, score: 0, playerCount: pc, humanPlayers: hp
-        });
-      }
-    });
+    // --- Game start (handled below in viewer section for both host+viewer modes) ---
 
     // --- Victory ---
     socket.on('game-victory', ({ score, lives }) => {
@@ -491,18 +560,187 @@
       updateSlotLabels();
     });
 
-    // --- Back to lobby ---
-    socket.on('back-to-lobby', ({ playerList }) => {
-      document.getElementById('disconnect-overlay').style.display = 'none';
-      showScreen('qr-screen');
-      document.getElementById('lobby-section').classList.remove('hidden');
-      updateLobby(playerList);
-      if (gameInstance) { gameInstance.destroy(true); gameInstance = null; }
-    });
+    // --- Back to lobby (handled below in viewer section for both host+viewer modes) ---
 
     // --- Host temporary disconnect (no action needed, just log) ---
     socket.on('host-temporarily-disconnected', () => {
       console.log('[host] Host temporarily disconnected, waiting for rejoin...');
+    });
+
+    // ====================================================
+    // VIEWER MODE — Join a game from another computer
+    // ====================================================
+    let isViewer = false;
+    let viewerRoomCode = null;
+
+    // Elements to hide/show when switching modes
+    const hostElements = ['qr-box', 'room-code-display', 'new-code-btn', 'sound-hint', 'initial-waiting'];
+    const playerCountSection = document.querySelector('.player-count-row').parentElement;
+
+    document.getElementById('join-game-btn').addEventListener('click', () => {
+      // Hide host-specific elements
+      hostElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      playerCountSection.style.display = 'none';
+      document.getElementById('lobby-section').classList.add('hidden');
+
+      // Show viewer join form
+      document.getElementById('viewer-join-section').style.display = 'flex';
+      document.getElementById('join-game-btn').style.display = 'none';
+
+      // Focus the input
+      document.getElementById('viewer-room-code').focus();
+    });
+
+    document.getElementById('back-to-host-btn').addEventListener('click', () => {
+      // Restore host mode
+      document.getElementById('viewer-join-section').style.display = 'none';
+      document.getElementById('join-game-btn').style.display = 'inline-block';
+      hostElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && id !== 'initial-waiting') el.style.display = '';
+      });
+      playerCountSection.style.display = '';
+      if (currentRoomCode) {
+        document.getElementById('initial-waiting').style.display = 'none';
+        document.getElementById('lobby-section').classList.remove('hidden');
+      } else {
+        document.getElementById('initial-waiting').style.display = 'block';
+      }
+    });
+
+    document.getElementById('viewer-join-submit').addEventListener('click', () => {
+      const code = document.getElementById('viewer-room-code').value.trim();
+      if (!code || code.length !== 4) {
+        document.getElementById('viewer-join-error').textContent = 'Enter a 4-digit room code';
+        return;
+      }
+      document.getElementById('viewer-join-error').textContent = '';
+      viewerRoomCode = code;
+      socket.emit('viewer-join', { roomCode: code });
+    });
+
+    document.getElementById('viewer-room-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('viewer-join-submit').click();
+    });
+
+    // Viewer joined successfully
+    socket.on('viewer-joined', ({ roomCode, playerList, gameState, currentLevel, lives, score, playerCount }) => {
+      isViewer = true;
+      viewerRoomCode = roomCode;
+      currentRoomCode = roomCode; // So existing event handlers work
+
+      // Update UI to show viewer lobby (read-only)
+      document.getElementById('viewer-join-section').style.display = 'none';
+      playerCountSection.style.display = 'none';
+      document.getElementById('new-code-btn').style.display = 'none';
+
+      // Show room code
+      document.getElementById('room-code-display').textContent = roomCode;
+      document.getElementById('room-code-display').style.display = 'block';
+
+      // Show "VIEWER" badge next to room code
+      document.getElementById('qr-box').style.display = 'none';
+
+      if (playerCount) {
+        selectedPlayerCount = playerCount;
+        for (let i = 0; i < 4; i++) {
+          const slot = document.getElementById(`slot-${i}`);
+          slot.style.display = i < selectedPlayerCount ? 'block' : 'none';
+        }
+      }
+
+      // Show lobby
+      if (playerList && playerList.length > 0) {
+        playerList.forEach(p => { playerNames[p.playerIndex] = p.nickname; });
+        document.getElementById('lobby-section').classList.remove('hidden');
+        document.getElementById('initial-waiting').style.display = 'none';
+        updateLobby(playerList);
+      } else {
+        document.getElementById('lobby-section').classList.remove('hidden');
+        document.getElementById('initial-waiting').style.display = 'none';
+        updateSlotLabels();
+      }
+
+      // Add viewer indicator
+      const subtitle = document.querySelector('.subtitle');
+      if (subtitle) subtitle.textContent = `VIEWER — Room ${roomCode}`;
+
+      console.log(`[viewer] Joined room ${roomCode} (state: ${gameState})`);
+
+      // If game is already in progress, start viewer game immediately
+      if (gameState === 'playing') {
+        const hp = Object.keys(playerNames).map(Number);
+        startViewerGame(currentLevel || 1, lives || 3, score || 0, playerCount || 2, hp);
+      }
+    });
+
+    socket.on('viewer-join-error', ({ message }) => {
+      document.getElementById('viewer-join-error').textContent = message;
+    });
+
+    // Game start — handles both host and viewer modes
+    socket.on('game-start', ({ level, lives, playerCount, humanPlayers }) => {
+      if (typeof initAudio === 'function') initAudio();
+
+      if (isViewer) {
+        const pc = playerCount || selectedPlayerCount || 2;
+        const hp = humanPlayers || Object.keys(playerNames).map(Number);
+        startViewerGame(level || 1, lives || 3, 0, pc, hp);
+      } else {
+        // Original host behavior
+        showScreen('game-container');
+        const pc = playerCount || selectedPlayerCount || 2;
+        const hp = humanPlayers || Object.keys(playerNames).map(Number);
+        if (!gameInstance) {
+          gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, false);
+        } else {
+          gameInstance._playerCount = pc;
+          gameInstance._humanPlayers = hp;
+          gameInstance._playerNames = playerNames;
+          gameInstance.scene.getScene('GameScene').scene.restart({
+            level: 1, lives: lives || 3, score: 0, playerCount: pc, humanPlayers: hp
+          });
+        }
+      }
+    });
+
+    function startViewerGame(level, lives, score, pc, hp) {
+      showScreen('game-container');
+      if (!gameInstance) {
+        gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, true);
+      } else {
+        gameInstance._playerCount = pc;
+        gameInstance._humanPlayers = hp;
+        gameInstance._playerNames = playerNames;
+        const sceneName = 'ViewerGameScene';
+        const scene = gameInstance.scene.getScene(sceneName);
+        if (scene) {
+          scene.scene.restart({ level, lives, score, playerCount: pc, humanPlayers: hp });
+        }
+      }
+    }
+
+    // Back to lobby — handles both host and viewer modes
+    socket.on('back-to-lobby', ({ playerList }) => {
+      document.getElementById('disconnect-overlay').style.display = 'none';
+      showScreen('qr-screen');
+
+      if (isViewer) {
+        // Viewer lobby mode — hide host-specific controls
+        document.getElementById('qr-box').style.display = 'none';
+        document.getElementById('new-code-btn').style.display = 'none';
+        playerCountSection.style.display = 'none';
+        document.getElementById('join-game-btn').style.display = 'none';
+        document.getElementById('viewer-join-section').style.display = 'none';
+      }
+
+      document.getElementById('lobby-section').classList.remove('hidden');
+      playerList.forEach(p => { playerNames[p.playerIndex] = p.nickname; });
+      updateLobby(playerList);
+      if (gameInstance) { gameInstance.destroy(true); gameInstance = null; }
     });
   </script>
 </body>

@@ -46,6 +46,7 @@ function findRoomBySocket(socketId) {
     for (const [sid, player] of room.players) {
       if (sid === socketId) return { code, role: 'player', playerIndex: player.playerIndex };
     }
+    if (room.viewers && room.viewers.has(socketId)) return { code, role: 'viewer' };
   }
   return null;
 }
@@ -80,6 +81,7 @@ io.on('connection', (socket) => {
     rooms.set(roomCode, {
       hostSocketId: socket.id,
       players: new Map(),
+      viewers: new Set(),      // remote computers watching the game
       gameState: 'lobby',
       currentLevel: 1,
       lives: 3,
@@ -248,6 +250,42 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Viewer (remote computer) joins a room to watch the game
+  socket.on('viewer-join', ({ roomCode }) => {
+    const room = rooms.get(roomCode);
+
+    if (!room) {
+      socket.emit('viewer-join-error', { message: 'Room not found' });
+      return;
+    }
+
+    room.viewers.add(socket.id);
+    socket.join(roomCode);
+    socket.data.roomCode = roomCode;
+    socket.data.role = 'viewer';
+
+    socket.emit('viewer-joined', {
+      roomCode,
+      playerList: buildPlayerList(room),
+      gameState: room.gameState,
+      currentLevel: room.currentLevel,
+      lives: room.lives,
+      score: room.score,
+      playerCount: room.playerCount,
+    });
+    console.log(`[viewer] ${socket.id} joined room ${roomCode} (${room.viewers.size} viewers)`);
+  });
+
+  // Host broadcasts game state to viewers (relayed via server)
+  socket.on('game-state-update', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.viewers.size === 0) return; // skip if no viewers
+
+    // Relay to all sockets in the room except the host
+    socket.to(data.roomCode).volatile.emit('game-state-update', data);
+  });
+
   // Level complete (host notifies)
   socket.on('level-complete', ({ roomCode, nextLevel, levelTime }) => {
     const room = rooms.get(roomCode);
@@ -357,6 +395,13 @@ io.on('connection', (socket) => {
 
     const room = rooms.get(info.code);
     if (!room) return;
+
+    if (info.role === 'viewer') {
+      // Viewer left — just remove from set
+      room.viewers.delete(socket.id);
+      console.log(`[viewer-left] ${socket.id} from room ${info.code} (${room.viewers.size} remaining)`);
+      return;
+    }
 
     if (info.role === 'host') {
       // Host disconnected — start grace period (30s for refresh)

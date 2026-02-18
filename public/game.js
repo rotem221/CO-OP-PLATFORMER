@@ -311,7 +311,8 @@ class BootScene extends Phaser.Scene {
     gl.fillStyle(0xff0000, 1); gl.fillRect(1, 0, 4, 8);
     gl.generateTexture('laser', 6, 8); gl.destroy();
 
-    this.scene.start('GameScene', { level: 1 });
+    const startScene = this.game._isViewer ? 'ViewerGameScene' : 'GameScene';
+    this.scene.start(startScene, { level: 1 });
   }
 }
 
@@ -592,6 +593,29 @@ class GameScene extends Phaser.Scene {
 
     // Fall death
     if (this.players.some(p => p.y > 750)) this.onHazardHit();
+
+    // Broadcast state to viewers (~15 fps)
+    if (this._socket && this._roomCode) {
+      if (!this._lastBroadcast || time - this._lastBroadcast > 66) {
+        this._lastBroadcast = time;
+        const playerStates = this.players.map((p, i) => ({
+          idx: i, x: Math.round(p.x), y: Math.round(p.y),
+        }));
+        const pressedPlates = this.pressurePlateObjects
+          .filter(pl => pl.getData('pressed'))
+          .map(pl => pl.getData('id'));
+        const openGates = [...this.gateObjects.entries()]
+          .filter(([, g]) => g.getData('wasOpen'))
+          .map(([id]) => id);
+
+        this._socket.volatile.emit('game-state-update', {
+          roomCode: this._roomCode,
+          players: playerStates,
+          plates: pressedPlates,
+          gates: openGates,
+        });
+      }
+    }
   }
 
   handleMovement(player, input, playerIndex) {
@@ -852,6 +876,319 @@ class GameScene extends Phaser.Scene {
 }
 
 // ============================================================
+// VIEWER GAME SCENE — Display-only for remote viewers
+// Receives state from host, no physics input, no socket emits
+// ============================================================
+class ViewerGameScene extends Phaser.Scene {
+  constructor() { super('ViewerGameScene'); }
+
+  init(data) {
+    this.currentLevel = data.level || 1;
+    this.playerCount = data.playerCount || this.game._playerCount || 2;
+    this.humanPlayers = data.humanPlayers || this.game._humanPlayers || [0, 1];
+    this.lives = data.lives !== undefined ? data.lives : 3;
+    this.score = data.score || 0;
+  }
+
+  create() {
+    const levelData = LEVELS[this.currentLevel];
+    if (!levelData) return;
+
+    // --- World bounds ---
+    this.physics.world.setBounds(0, 0, levelData.width, levelData.height);
+    this.physics.world.gravity.y = 0; // No gravity for viewer
+    this.cameras.main.setBackgroundColor('#000000');
+
+    // --- Background grid ---
+    const bg = this.add.graphics();
+    bg.lineStyle(1, 0x0a1a2a, 0.3);
+    for (let x = 0; x < levelData.width; x += 64) { bg.moveTo(x, 0); bg.lineTo(x, levelData.height); }
+    for (let y = 0; y < levelData.height; y += 64) { bg.moveTo(0, y); bg.lineTo(levelData.width, y); }
+    bg.strokePath();
+
+    // --- Level name ---
+    this.levelText = this.add.text(640, 30, `LEVEL ${this.currentLevel} — ${levelData.name}`, {
+      fontFamily: 'Courier New', fontSize: '20px', color: '#888',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({ targets: this.levelText, alpha: 0, duration: 1000 });
+    });
+
+    // --- Platforms (visual only) ---
+    levelData.platforms.forEach(p => {
+      this.add.rectangle(p.x, p.y, p.w + 6, p.h + 6, 0x00ffff, 0.08);
+      const plat = this.add.image(p.x, p.y, 'platform');
+      plat.setDisplaySize(p.w, p.h);
+    });
+
+    // --- Spikes (visual only) ---
+    levelData.spikes.forEach(s => {
+      this.add.rectangle(s.x, s.y, s.w + 8, s.h + 8, 0xff0044, 0.15);
+      const numSpikes = Math.floor(s.w / 16);
+      for (let i = 0; i < numSpikes; i++) {
+        const sx = s.x - s.w / 2 + i * 16 + 8;
+        this.add.image(sx, s.y, 'spike');
+      }
+    });
+
+    // --- Pressure Plates (visual) ---
+    this.pressurePlateObjects = [];
+    levelData.pressurePlates.forEach(pp => {
+      const plate = this.add.image(pp.x, pp.y, 'pressurePlate');
+      plate.setDisplaySize(pp.w, 12);
+      plate.setData('id', pp.id);
+      plate.setData('opensGate', pp.opensGate);
+      this.pressurePlateObjects.push(plate);
+    });
+
+    // --- Gates (visual) ---
+    this.gateObjects = new Map();
+    levelData.gates.forEach(g => {
+      const glow = this.add.rectangle(g.x, g.y, g.w + 10, g.h + 10, 0xff00ff, 0.1);
+      const gate = this.add.image(g.x, g.y, 'gate');
+      gate.setDisplaySize(g.w, g.h);
+      gate.setData('id', g.id);
+      gate.setData('glow', glow);
+      this.gateObjects.set(g.id, gate);
+    });
+
+    // --- Plate indicators ---
+    if (levelData.pressurePlates.length > 0) {
+      levelData.pressurePlates.forEach(pp => {
+        const matchingGate = levelData.gates.find(g => g.id === pp.opensGate);
+        if (!matchingGate) return;
+        const lineGfx = this.add.graphics();
+        lineGfx.lineStyle(2, 0xffff00, 0.2);
+        const dx = matchingGate.x - pp.x, dy = matchingGate.y - pp.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dashLen = 10, gapLen = 8;
+        const steps = Math.floor(dist / (dashLen + gapLen));
+        for (let i = 0; i < steps; i++) {
+          const t1 = (i * (dashLen + gapLen)) / dist;
+          const t2 = Math.min((i * (dashLen + gapLen) + dashLen) / dist, 1);
+          lineGfx.moveTo(pp.x + dx * t1, pp.y + dy * t1);
+          lineGfx.lineTo(pp.x + dx * t2, pp.y + dy * t2);
+        }
+        lineGfx.strokePath(); lineGfx.setDepth(0);
+        const label = this.add.text(pp.x, pp.y - 24, '\u25BC STAND \u25BC', {
+          fontFamily: 'Courier New', fontSize: '9px', color: '#ffff00', align: 'center', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(5);
+        this.tweens.add({ targets: label, alpha: { from: 0.4, to: 1 }, y: pp.y - 28, duration: 800, yoyo: true, repeat: -1 });
+      });
+    }
+
+    // --- Moving Platforms ---
+    this.movingPlatformObjects = [];
+    levelData.movingPlatforms.forEach(mp => {
+      const plat = this.add.image(mp.x, mp.y, 'movingPlatform');
+      plat.setDisplaySize(mp.w, mp.h);
+      plat.setData('config', { originX: mp.x, originY: mp.y, moveX: mp.moveX || 0, moveY: mp.moveY || 0, speed: mp.speed || 60 });
+      this.movingPlatformObjects.push(plat);
+    });
+
+    // --- Lasers ---
+    this.laserObjects = [];
+    levelData.lasers.forEach(l => {
+      const laser = this.add.image(l.x, l.y, 'laser');
+      laser.setDisplaySize(l.w, l.h);
+      laser.setData('config', { onTime: l.onTime, offTime: l.offTime, offset: Math.random() * (l.onTime + l.offTime) });
+      const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, 0xff0000, 0.15);
+      laser.setData('glow', glow);
+      this.laserObjects.push(laser);
+    });
+
+    // --- Exit Door ---
+    this.exitDoor = this.add.image(levelData.exit.x, levelData.exit.y, 'exit');
+    this.exitDoor.setDisplaySize(48, 64);
+    this.exitGlow = this.add.rectangle(levelData.exit.x, levelData.exit.y, 60, 76, 0x00ff00, 0.1);
+    this.tweens.add({ targets: this.exitGlow, alpha: { from: 0.05, to: 0.2 }, scaleX: { from: 1, to: 1.1 }, scaleY: { from: 1, to: 1.1 }, duration: 1000, yoyo: true, repeat: -1 });
+
+    // --- Players (sprites only, no physics) ---
+    this.players = [];
+    this.playerLabels = [];
+    const names = this._playerNames || {};
+
+    for (let i = 0; i < this.playerCount; i++) {
+      const spawn = levelData.spawns[i] || levelData.spawns[0];
+      const p = this.add.sprite(spawn.x, spawn.y, PLAYER_KEYS[i]);
+      p.setDepth(10);
+      p.playerIndex = i;
+      p.targetX = spawn.x;
+      p.targetY = spawn.y;
+      this.players.push(p);
+
+      // Name label
+      const isAI = !this.humanPlayers.includes(i);
+      const labelText = isAI ? '\uD83E\uDD16 AI' : (names[i] || PLAYER_LABELS[i]);
+      const label = this.add.text(0, 0, labelText, {
+        fontFamily: 'Courier New', fontSize: '11px', color: PLAYER_COLOR_STRS[i],
+      }).setOrigin(0.5).setDepth(11);
+      this.playerLabels.push(label);
+    }
+
+    // --- Camera ---
+    this.cameras.main.setBounds(0, 0, levelData.width, levelData.height);
+
+    // --- Death flash ---
+    this.deathFlash = this.add.rectangle(640, 360, 1280, 720, 0xff0000, 0).setScrollFactor(0).setDepth(200);
+
+    // --- HUD ---
+    this.heartIcons = [];
+    for (let i = 0; i < 3; i++) {
+      const heart = this.add.text(24 + i * 32, 56, '\u2764', {
+        fontSize: '24px', color: '#ff0044',
+      }).setScrollFactor(0).setDepth(250).setAlpha(i < this.lives ? 1 : 0.15);
+      this.heartIcons.push(heart);
+    }
+    this.scoreText = this.add.text(1256, 56, `SCORE: ${this.score}`, {
+      fontFamily: 'Courier New', fontSize: '16px', color: '#ffff00',
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(250);
+
+    // "VIEWER" badge
+    this.add.text(640, 690, 'VIEWER MODE', {
+      fontFamily: 'Courier New', fontSize: '12px', color: '#555',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(250);
+
+    // --- Socket listeners for state ---
+    if (this._socket) {
+      this._socket.off('game-state-update');
+      this._socket.on('game-state-update', (data) => {
+        // Update player positions
+        if (data.players) {
+          data.players.forEach(pd => {
+            const p = this.players[pd.idx];
+            if (p) {
+              p.targetX = pd.x;
+              p.targetY = pd.y;
+            }
+          });
+        }
+        // Update pressure plates
+        if (data.plates) {
+          this.pressurePlateObjects.forEach(plate => {
+            const isPressed = data.plates.includes(plate.getData('id'));
+            plate.setTexture(isPressed ? 'pressurePlateDown' : 'pressurePlate');
+          });
+        }
+        // Update gates
+        if (data.gates) {
+          for (const [gateId, gate] of this.gateObjects) {
+            const isOpen = data.gates.includes(gateId);
+            gate.setAlpha(isOpen ? 0.12 : 1);
+            const glow = gate.getData('glow');
+            if (glow) glow.setAlpha(isOpen ? 0.03 : 0.1);
+          }
+        }
+      });
+
+      this._socket.off('lives-update');
+      this._socket.on('lives-update', ({ lives }) => {
+        this.lives = lives;
+        this.heartIcons.forEach((h, i) => { h.setAlpha(i < this.lives ? 1 : 0.15); });
+        // Death flash
+        this.tweens.add({ targets: this.deathFlash, alpha: { from: 0.4, to: 0 }, duration: 500 });
+      });
+
+      this._socket.off('level-transition');
+      this._socket.on('level-transition', ({ nextLevel, score, lives }) => {
+        playSound('success');
+        // Celebration particles
+        for (let i = 0; i < 15; i++) {
+          this.time.delayedCall(i * 50, () => {
+            const x = this.exitDoor.x + Phaser.Math.Between(-60, 60);
+            const y = this.exitDoor.y + Phaser.Math.Between(-40, 40);
+            const colors = [0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
+            const c = this.add.circle(x, y, Phaser.Math.Between(3, 7), Phaser.Utils.Array.GetRandom(colors), 0.8);
+            this.tweens.add({ targets: c, y: y - Phaser.Math.Between(30, 80), alpha: 0, duration: 600, onComplete: () => c.destroy() });
+          });
+        }
+        const transText = this.add.text(640, 360, `LEVEL ${nextLevel}`, {
+          fontFamily: 'Courier New', fontSize: '48px', color: '#00ff00', stroke: '#000', strokeThickness: 4,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(300).setAlpha(0);
+        this.tweens.add({
+          targets: transText, alpha: 1, duration: 500, yoyo: true, hold: 800,
+          onComplete: () => {
+            transText.destroy();
+            this.scene.restart({ level: nextLevel, lives: lives, score: score, playerCount: this.playerCount, humanPlayers: this.humanPlayers });
+          },
+        });
+      });
+
+      this._socket.off('game-over-lives');
+      this._socket.on('game-over-lives', ({ score, level }) => {
+        this.tweens.add({
+          targets: this.players, alpha: 0, duration: 600,
+          onComplete: () => {
+            this.time.delayedCall(400, () => {
+              this.scene.start('GameOverScene', { level: level || this.currentLevel, score: score || 0 });
+            });
+          },
+        });
+      });
+
+      this._socket.off('game-victory');
+      this._socket.on('game-victory', ({ score, lives }) => {
+        this.game._finalScore = score || 0;
+        this.game._finalLives = lives || 0;
+        this.time.delayedCall(1500, () => { this.scene.start('VictoryScene'); });
+      });
+
+      this._socket.off('retry-level');
+      this._socket.on('retry-level', ({ level, lives, score }) => {
+        this.scene.restart({ level, lives, score, playerCount: this.playerCount, humanPlayers: this.humanPlayers });
+      });
+    }
+  }
+
+  update(time, delta) {
+    // Interpolate player positions smoothly
+    this.players.forEach((p, i) => {
+      if (p.targetX !== undefined) {
+        p.x += (p.targetX - p.x) * 0.3;
+        p.y += (p.targetY - p.y) * 0.3;
+      }
+    });
+
+    // Update labels
+    this.playerLabels.forEach((label, i) => {
+      if (label && this.players[i]) label.setPosition(this.players[i].x, this.players[i].y - 36);
+    });
+
+    // Moving platforms (deterministic — animate locally)
+    this.movingPlatformObjects.forEach(plat => {
+      const cfg = plat.getData('config');
+      const t = time * 0.001;
+      if (cfg.moveX) plat.x = cfg.originX + Math.sin(t * (cfg.speed / 60)) * cfg.moveX;
+      if (cfg.moveY) plat.y = cfg.originY + Math.sin(t * (cfg.speed / 60)) * cfg.moveY;
+    });
+
+    // Lasers (deterministic — animate locally)
+    this.laserObjects.forEach(laser => {
+      const cfg = laser.getData('config');
+      const cycle = cfg.onTime + cfg.offTime;
+      const phase = (time + cfg.offset) % cycle;
+      const isOn = phase < cfg.onTime;
+      const glow = laser.getData('glow');
+      if (isOn) {
+        laser.setVisible(true);
+        laser.setAlpha(0.7 + Math.sin(time * 0.015) * 0.3);
+        if (glow) { glow.setVisible(true); glow.setAlpha(0.1 + Math.sin(time * 0.01) * 0.08); }
+      } else {
+        laser.setVisible(false);
+        if (glow) glow.setVisible(false);
+      }
+    });
+
+    // Camera centroid
+    if (this.players.length > 0) {
+      const midX = this.players.reduce((s, p) => s + p.x, 0) / this.players.length;
+      const midY = this.players.reduce((s, p) => s + p.y, 0) / this.players.length;
+      this.cameras.main.centerOn(midX, midY);
+    }
+  }
+}
+
+// ============================================================
 // VICTORY SCENE (with Scoreboard)
 // ============================================================
 class VictoryScene extends Phaser.Scene {
@@ -901,16 +1238,22 @@ class VictoryScene extends Phaser.Scene {
       },
     });
 
-    // Play Again
+    // Play Again (host only — viewers see "waiting" message)
     const btnY = boardY + 200;
-    const playAgainBg = this.add.rectangle(640, btnY, 240, 56, 0x00ff00, 0.15).setInteractive({ useHandCursor: true });
-    this.add.rectangle(640, btnY, 240, 56).setStrokeStyle(2, 0x00ff00);
-    this.add.text(640, btnY, 'PLAY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#00ff00' }).setOrigin(0.5);
-    playAgainBg.on('pointerover', () => playAgainBg.setFillStyle(0x00ff00, 0.3));
-    playAgainBg.on('pointerout', () => playAgainBg.setFillStyle(0x00ff00, 0.15));
-    playAgainBg.on('pointerdown', () => {
-      if (this._socket && this._roomCode) this._socket.emit('play-again', { roomCode: this._roomCode });
-    });
+    if (this.game._isViewer) {
+      this.add.text(640, btnY, 'Waiting for host...', {
+        fontFamily: 'Courier New', fontSize: '18px', color: '#555',
+      }).setOrigin(0.5);
+    } else {
+      const playAgainBg = this.add.rectangle(640, btnY, 240, 56, 0x00ff00, 0.15).setInteractive({ useHandCursor: true });
+      this.add.rectangle(640, btnY, 240, 56).setStrokeStyle(2, 0x00ff00);
+      this.add.text(640, btnY, 'PLAY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#00ff00' }).setOrigin(0.5);
+      playAgainBg.on('pointerover', () => playAgainBg.setFillStyle(0x00ff00, 0.3));
+      playAgainBg.on('pointerout', () => playAgainBg.setFillStyle(0x00ff00, 0.15));
+      playAgainBg.on('pointerdown', () => {
+        if (this._socket && this._roomCode) this._socket.emit('play-again', { roomCode: this._roomCode });
+      });
+    }
 
     this._socket = this.game._socket;
     this._roomCode = this.game._roomCode;
@@ -954,20 +1297,27 @@ class GameOverScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // TRY AGAIN
-    const retryBg = this.add.rectangle(640, 460, 260, 56, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
-    this.add.rectangle(640, 460, 260, 56).setStrokeStyle(2, 0xff0044);
-    this.add.text(640, 460, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#ff0044' }).setOrigin(0.5);
-    retryBg.on('pointerover', () => retryBg.setFillStyle(0xff0044, 0.3));
-    retryBg.on('pointerout', () => retryBg.setFillStyle(0xff0044, 0.15));
-    retryBg.on('pointerdown', () => {
-      if (this._socket && this._roomCode) this._socket.emit('try-again', { roomCode: this._roomCode });
-    });
+    // TRY AGAIN (host only — viewers see "waiting" message)
+    if (this.game._isViewer) {
+      this.add.text(640, 460, 'Waiting for host...', {
+        fontFamily: 'Courier New', fontSize: '18px', color: '#555',
+      }).setOrigin(0.5);
+    } else {
+      const retryBg = this.add.rectangle(640, 460, 260, 56, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
+      this.add.rectangle(640, 460, 260, 56).setStrokeStyle(2, 0xff0044);
+      this.add.text(640, 460, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#ff0044' }).setOrigin(0.5);
+      retryBg.on('pointerover', () => retryBg.setFillStyle(0xff0044, 0.3));
+      retryBg.on('pointerout', () => retryBg.setFillStyle(0xff0044, 0.15));
+      retryBg.on('pointerdown', () => {
+        if (this._socket && this._roomCode) this._socket.emit('try-again', { roomCode: this._roomCode });
+      });
+    }
 
     if (this._socket) {
       this._socket.off('retry-level');
       this._socket.on('retry-level', ({ level, lives, score }) => {
-        this.scene.start('GameScene', { level, lives, score, playerCount, humanPlayers });
+        const targetScene = this.game._isViewer ? 'ViewerGameScene' : 'GameScene';
+        this.scene.start(targetScene, { level, lives, score, playerCount, humanPlayers });
       });
     }
 
@@ -986,7 +1336,11 @@ class GameOverScene extends Phaser.Scene {
 // ============================================================
 // CREATE GAME — Called from index.html when game starts
 // ============================================================
-function createGame(socket, roomCode, playerNames, playerCount, humanPlayers) {
+function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, isViewer) {
+  const scenes = isViewer
+    ? [BootScene, ViewerGameScene, VictoryScene, GameOverScene]
+    : [BootScene, GameScene, VictoryScene, GameOverScene];
+
   const config = {
     type: Phaser.AUTO,
     width: 1280,
@@ -994,8 +1348,8 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers) {
     parent: 'game-container',
     backgroundColor: '#000000',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    physics: { default: 'arcade', arcade: { gravity: { y: 800 }, debug: false } },
-    scene: [BootScene, GameScene, VictoryScene, GameOverScene],
+    physics: { default: 'arcade', arcade: { gravity: { y: isViewer ? 0 : 800 }, debug: false } },
+    scene: scenes,
   };
 
   const game = new Phaser.Game(config);
@@ -1005,12 +1359,17 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers) {
   game._playerNames = playerNames || {};
   game._playerCount = playerCount || 2;
   game._humanPlayers = humanPlayers || [0, 1];
+  game._isViewer = isViewer || false;
   game._finalScore = 0;
   game._finalLives = 0;
 
+  const sceneNames = isViewer
+    ? ['ViewerGameScene', 'VictoryScene', 'GameOverScene']
+    : ['GameScene', 'VictoryScene', 'GameOverScene'];
+
   // Inject references into scenes
   game.events.on('ready', () => {
-    ['GameScene', 'VictoryScene', 'GameOverScene'].forEach(name => {
+    sceneNames.forEach(name => {
       const scene = game.scene.getScene(name);
       if (scene) {
         scene._socket = socket;
@@ -1021,7 +1380,7 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers) {
   });
 
   game.events.on('step', () => {
-    ['GameScene', 'VictoryScene', 'GameOverScene'].forEach(name => {
+    sceneNames.forEach(name => {
       const scene = game.scene.getScene(name);
       if (scene && !scene._socket) {
         scene._socket = socket;
