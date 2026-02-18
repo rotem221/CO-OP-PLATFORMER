@@ -440,7 +440,7 @@
     }
 
     // --- Socket connection ---
-    const socket = io();
+    const socket = io({ transports: ['websocket'] });
 
     // --- Screen management ---
     function showScreen(id) {

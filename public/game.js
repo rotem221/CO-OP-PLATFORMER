@@ -7,7 +7,7 @@ const PLAYER_COLORS = [0x00ffff, 0xff00ff, 0xffff00, 0x00ff00];
 const PLAYER_COLOR_STRS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00'];
 const PLAYER_KEYS = ['player1', 'player2', 'player3', 'player4'];
 const PLAYER_LABELS = ['P1', 'P2', 'P3', 'P4'];
-const FACE_TYPES = ['smiley', 'crazy', 'angry'];
+const FACE_TYPES = ['smiley', 'crazy', 'angry', 'cool', 'wink', 'skull'];
 
 function getPlayerTexture(index, face) {
   if (face && FACE_TYPES.includes(face)) return `player${index}_${face}`;
@@ -841,6 +841,63 @@ class BootScene extends Phaser.Scene {
           g.beginPath();
           g.arc(18, 34, 6, Math.PI + 0.2, -0.2, false);
           g.strokePath();
+        } else if (face === 'cool') {
+          // Sunglasses bar
+          g.fillStyle(0x000000, 0.9);
+          g.fillRect(7, 14, 22, 7);
+          // Sunglasses lenses
+          g.fillStyle(0x222244, 1);
+          g.fillRect(8, 15, 8, 5);
+          g.fillRect(20, 15, 8, 5);
+          // Sunglasses bridge
+          g.fillStyle(0x000000, 1);
+          g.fillRect(16, 16, 4, 3);
+          // Smirk
+          g.lineStyle(2, 0xffffff, 0.8);
+          g.beginPath();
+          g.moveTo(12, 30); g.lineTo(18, 28); g.lineTo(24, 30);
+          g.strokePath();
+        } else if (face === 'wink') {
+          // Left eye (open)
+          g.fillStyle(0xffffff, 1);
+          g.fillRect(10, 14, 6, 6);
+          g.fillStyle(0x000000, 1);
+          g.fillRect(12, 16, 3, 3);
+          // Right eye (wink line)
+          g.lineStyle(2, 0xffffff, 0.9);
+          g.beginPath();
+          g.moveTo(19, 17); g.lineTo(27, 15);
+          g.strokePath();
+          // Tongue out smile
+          g.lineStyle(2, 0xffffff, 0.8);
+          g.beginPath();
+          g.arc(18, 28, 6, 0.2, Math.PI - 0.2, false);
+          g.strokePath();
+          g.fillStyle(0xff4466, 1);
+          g.fillCircle(21, 33, 3);
+        } else if (face === 'skull') {
+          // Eye sockets
+          g.fillStyle(0x000000, 0.9);
+          g.fillCircle(13, 16, 5);
+          g.fillCircle(23, 16, 5);
+          // Eye glow
+          g.fillStyle(0xffffff, 0.7);
+          g.fillCircle(13, 16, 2);
+          g.fillCircle(23, 16, 2);
+          // Nose
+          g.fillStyle(0x000000, 0.8);
+          g.fillTriangle(16, 23, 20, 23, 18, 26);
+          // Teeth
+          g.fillStyle(0xffffff, 0.9);
+          for (let t = 0; t < 5; t++) {
+            g.fillRect(10 + t * 4, 29, 3, 4);
+          }
+          g.lineStyle(1, 0x000000, 0.5);
+          for (let t = 0; t < 4; t++) {
+            g.beginPath();
+            g.moveTo(13 + t * 4, 29); g.lineTo(13 + t * 4, 33);
+            g.strokePath();
+          }
         }
 
         g.generateTexture(`player${i}_${face}`, 36, 52);
@@ -1094,7 +1151,7 @@ class GameScene extends Phaser.Scene {
       const p = this.physics.add.sprite(spawn.x, spawn.y, tex);
       p.setBounce(0.05);
       p.setCollideWorldBounds(true);
-      p.body.setMaxVelocity(200, 500);
+      p.body.setMaxVelocity(260, 520);
       p.setDepth(10);
       p.playerIndex = i;
       this.players.push(p);
@@ -1289,12 +1346,12 @@ class GameScene extends Phaser.Scene {
 
   handleMovement(player, input, playerIndex) {
     if (!input) return;
-    if (input.left) player.setVelocityX(-200);
-    else if (input.right) player.setVelocityX(200);
+    if (input.left) player.setVelocityX(-260);
+    else if (input.right) player.setVelocityX(260);
     else player.setVelocityX(0);
 
     if (input.jump && player.body.blocked.down) {
-      player.setVelocityY(-430);
+      player.setVelocityY(-460);
       playSound('jump');
       this.spawnJumpParticles(player.x, player.y + 24, PLAYER_COLORS[playerIndex] || 0x00ffff);
     }
@@ -1316,19 +1373,19 @@ class GameScene extends Phaser.Scene {
     const dy = target.y - aiPlayer.y;
 
     // Move toward target horizontally
-    if (dx < -20) aiPlayer.setVelocityX(-200);
-    else if (dx > 20) aiPlayer.setVelocityX(200);
+    if (dx < -20) aiPlayer.setVelocityX(-260);
+    else if (dx > 20) aiPlayer.setVelocityX(260);
     else aiPlayer.setVelocityX(0);
 
     // Jump logic
     if (aiPlayer.body.blocked.down) {
       // Jump if target is significantly above
       if (dy < -40) {
-        aiPlayer.setVelocityY(-430);
+        aiPlayer.setVelocityY(-460);
       }
       // Jump if moving toward target but blocked by a wall
       else if ((dx > 30 && aiPlayer.body.blocked.right) || (dx < -30 && aiPlayer.body.blocked.left)) {
-        aiPlayer.setVelocityY(-430);
+        aiPlayer.setVelocityY(-460);
       }
       // Jump over small gaps — if target is ahead and far enough
       else if (Math.abs(dx) > 100 && Math.abs(dy) < 60) {
@@ -1338,7 +1395,7 @@ class GameScene extends Phaser.Scene {
         if (Math.abs(velX) > 150) {
           // Only jump occasionally to avoid constant jumping
           if (Math.random() < 0.03) {
-            aiPlayer.setVelocityY(-430);
+            aiPlayer.setVelocityY(-460);
           }
         }
       }

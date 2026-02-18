@@ -135,12 +135,13 @@
     /* Face selection */
     #face-select {
       display: flex;
-      gap: 16px;
+      gap: 10px;
       justify-content: center;
+      flex-wrap: wrap;
     }
     .face-btn {
-      width: 60px; height: 60px;
-      font-size: 2rem;
+      width: 50px; height: 50px;
+      font-size: 1.7rem;
       background: #111;
       border: 2px solid #333;
       border-radius: 12px;
@@ -315,9 +316,12 @@
     <div id="player-color"></div>
     <p style="color:#666; font-size:0.8rem; margin-top:4px;">Choose your face:</p>
     <div id="face-select">
-      <button class="face-btn selected" data-face="smiley">&#128522;</button>
-      <button class="face-btn" data-face="crazy">&#129322;</button>
-      <button class="face-btn" data-face="angry">&#128544;</button>
+      <button class="face-btn selected" data-face="smiley">😊</button>
+      <button class="face-btn" data-face="crazy">🤪</button>
+      <button class="face-btn" data-face="angry">😠</button>
+      <button class="face-btn" data-face="cool">😎</button>
+      <button class="face-btn" data-face="wink">😜</button>
+      <button class="face-btn" data-face="skull">💀</button>
     </div>
     <button id="ready-btn">READY</button>
     <div id="ready-status"></div>
@@ -371,7 +375,7 @@
     }
 
     // --- Socket ---
-    const socket = io();
+    const socket = io({ transports: ['websocket'] });
 
     // --- Reconnection from sessionStorage ---
     const savedRoom = sessionStorage.getItem('coop_roomCode');
@@ -494,6 +498,7 @@
     socket.on('game-start', () => {
       showScreen('controls-screen');
       requestWakeLock();
+      startInputHeartbeat();
     });
 
     // --- Touch Controls ---
@@ -554,6 +559,16 @@
           input: { ...inputState }
         });
       }
+    }
+
+    // Continuous input heartbeat — resend state every 50ms to recover from dropped packets
+    let inputInterval = null;
+    function startInputHeartbeat() {
+      if (inputInterval) return;
+      inputInterval = setInterval(sendInput, 50);
+    }
+    function stopInputHeartbeat() {
+      if (inputInterval) { clearInterval(inputInterval); inputInterval = null; }
     }
 
     // --- WakeLock ---
@@ -637,6 +652,7 @@
     });
 
     socket.on('back-to-lobby', ({ playerList }) => {
+      stopInputHeartbeat();
       document.getElementById('victory-overlay').style.display = 'none';
       document.getElementById('gameover-overlay').style.display = 'none';
       document.getElementById('ready-btn').classList.remove('pressed');

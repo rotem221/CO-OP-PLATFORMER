@@ -313,7 +313,7 @@ io.on('connection', (socket) => {
     if (!room) return;
     const player = room.players.get(socket.id);
     if (!player) return;
-    const validFaces = ['smiley', 'crazy', 'angry'];
+    const validFaces = ['smiley', 'crazy', 'angry', 'cool', 'wink', 'skull'];
     if (validFaces.includes(face)) {
       player.face = face;
       const playerList = buildPlayerList(room);
