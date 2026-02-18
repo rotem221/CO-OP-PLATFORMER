@@ -7,6 +7,12 @@ const PLAYER_COLORS = [0x00ffff, 0xff00ff, 0xffff00, 0x00ff00];
 const PLAYER_COLOR_STRS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00'];
 const PLAYER_KEYS = ['player1', 'player2', 'player3', 'player4'];
 const PLAYER_LABELS = ['P1', 'P2', 'P3', 'P4'];
+const FACE_TYPES = ['smiley', 'crazy', 'angry'];
+
+function getPlayerTexture(index, face) {
+  if (face && FACE_TYPES.includes(face)) return `player${index}_${face}`;
+  return PLAYER_KEYS[index];
+}
 
 // --- Web Audio API Sound System ---
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -101,8 +107,39 @@ function playSound(type) {
       osc.start(now); osc.stop(now + 1.0);
       break;
     }
+    case 'heartPickup': {
+      [660, 880, 1100].forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        const t = now + i * 0.08;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.start(now); osc.stop(t + 0.2);
+      });
+      break;
+    }
   }
 }
+
+// --- World Themes ---
+const WORLD_THEMES = {
+  cyan: {
+    bg: '#000000', grid: 0x0a1a2a, platform: 0x00cccc, platformGlow: 0x00ffff,
+    spike: 0xff0044, gate: 0xff00ff, laser: 0xff0000, bgStr: '#000000',
+  },
+  purple: {
+    bg: '#0a0014', grid: 0x1a0a2a, platform: 0x9944cc, platformGlow: 0xbb66ff,
+    spike: 0xff4400, gate: 0x00ffcc, laser: 0xff44aa, bgStr: '#0a0014',
+  },
+  fire: {
+    bg: '#140800', grid: 0x2a1408, platform: 0xcc6600, platformGlow: 0xff8800,
+    spike: 0xff0000, gate: 0x00ccff, laser: 0xffcc00, bgStr: '#140800',
+  },
+};
 
 // ============================================================
 // LEVEL DATA  —  All platforms are reachable with max jump ~115px
@@ -112,6 +149,7 @@ function playSound(type) {
 const LEVELS = {
   1: {
     name: 'TUTORIAL',
+    theme: 'cyan',
     width: 1280,
     height: 720,
     spawns: [
@@ -134,10 +172,14 @@ const LEVELS = {
     gates: [],
     movingPlatforms: [],
     lasers: [],
+    hearts: [
+      { x: 480, y: 500 },
+    ],
   },
 
   2: {
     name: 'COOPERATION',
+    theme: 'cyan',
     width: 2800,
     height: 720,
     spawns: [
@@ -174,10 +216,15 @@ const LEVELS = {
     ],
     movingPlatforms: [],
     lasers: [],
+    hearts: [
+      { x: 1500, y: 660 },
+      { x: 2560, y: 500 },
+    ],
   },
 
   3: {
     name: 'CHALLENGE',
+    theme: 'cyan',
     width: 3400,
     height: 720,
     spawns: [
@@ -230,6 +277,230 @@ const LEVELS = {
       { x: 1650, y: 400, w: 6, h: 320, onTime: 1500, offTime: 2000 },
       { x: 2550, y: 450, w: 6, h: 270, onTime: 1800, offTime: 1500 },
     ],
+    hearts: [
+      { x: 740, y: 445 },
+      { x: 1920, y: 480 },
+    ],
+  },
+
+  4: {
+    name: 'MOMENTUM',
+    theme: 'purple',
+    width: 4000,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 3800, y: 268 },
+    platforms: [
+      { x: 500, y: 700, w: 1000, h: 32 },
+      { x: 1200, y: 700, w: 200, h: 32 },
+      { x: 1700, y: 700, w: 600, h: 32 },
+      { x: 2300, y: 700, w: 400, h: 32 },
+      { x: 2800, y: 700, w: 200, h: 32 },
+      { x: 3300, y: 700, w: 600, h: 32 },
+      { x: 3800, y: 700, w: 400, h: 32 },
+      { x: 400, y: 610, w: 160, h: 20 },
+      { x: 650, y: 530, w: 160, h: 20 },
+      { x: 900, y: 460, w: 160, h: 20 },
+      { x: 1700, y: 600, w: 160, h: 20 },
+      { x: 2300, y: 580, w: 160, h: 20 },
+      { x: 3650, y: 610, w: 180, h: 20 },
+      { x: 3800, y: 530, w: 180, h: 20 },
+      { x: 3650, y: 450, w: 180, h: 20 },
+      { x: 3800, y: 370, w: 180, h: 20 },
+      { x: 3800, y: 300, w: 200, h: 20 },
+    ],
+    spikes: [
+      { x: 800, y: 688, w: 60, h: 16 },
+      { x: 1700, y: 688, w: 80, h: 16 },
+      { x: 3100, y: 688, w: 60, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 600,  y: 672, w: 64, h: 24, id: 'plateE',  opensGate: 'gateE' },
+      { x: 1400, y: 672, w: 64, h: 24, id: 'plateE2', opensGate: 'gateE' },
+      { x: 2100, y: 672, w: 64, h: 24, id: 'plateF',  opensGate: 'gateF' },
+      { x: 2700, y: 672, w: 64, h: 24, id: 'plateF2', opensGate: 'gateF' },
+    ],
+    gates: [
+      { x: 1050, y: 634, w: 24, h: 132, id: 'gateE' },
+      { x: 2550, y: 634, w: 24, h: 132, id: 'gateF' },
+    ],
+    movingPlatforms: [
+      { x: 1350, y: 580, w: 120, h: 20, moveX: 150, moveY: 0, speed: 70 },
+      { x: 1950, y: 520, w: 120, h: 20, moveX: 0, moveY: 120, speed: 55 },
+      { x: 2600, y: 600, w: 120, h: 20, moveX: 120, moveY: 0, speed: 65 },
+      { x: 3100, y: 540, w: 120, h: 20, moveX: 0, moveY: 100, speed: 60 },
+    ],
+    lasers: [
+      { x: 1100, y: 480, w: 6, h: 240, onTime: 1800, offTime: 1600 },
+      { x: 2000, y: 400, w: 6, h: 320, onTime: 1500, offTime: 1800 },
+      { x: 3000, y: 450, w: 6, h: 270, onTime: 1600, offTime: 1400 },
+    ],
+    hearts: [
+      { x: 650, y: 500 },
+      { x: 1950, y: 480 },
+      { x: 3100, y: 500 },
+    ],
+  },
+
+  5: {
+    name: 'TEAMWORK',
+    theme: 'purple',
+    width: 4500,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 4300, y: 268 },
+    platforms: [
+      { x: 500, y: 700, w: 1000, h: 32 },
+      { x: 1200, y: 700, w: 120, h: 32 },
+      { x: 1600, y: 700, w: 500, h: 32 },
+      { x: 2200, y: 700, w: 600, h: 32 },
+      { x: 2900, y: 700, w: 200, h: 32 },
+      { x: 3300, y: 700, w: 400, h: 32 },
+      { x: 3900, y: 700, w: 600, h: 32 },
+      { x: 4400, y: 700, w: 400, h: 32 },
+      { x: 350, y: 610, w: 160, h: 20 },
+      { x: 600, y: 530, w: 160, h: 20 },
+      { x: 850, y: 460, w: 160, h: 20 },
+      { x: 1600, y: 600, w: 160, h: 20 },
+      { x: 2200, y: 580, w: 160, h: 20 },
+      { x: 2600, y: 520, w: 160, h: 20 },
+      { x: 3300, y: 600, w: 160, h: 20 },
+      { x: 4150, y: 610, w: 180, h: 20 },
+      { x: 4300, y: 530, w: 180, h: 20 },
+      { x: 4150, y: 450, w: 180, h: 20 },
+      { x: 4300, y: 370, w: 180, h: 20 },
+      { x: 4300, y: 300, w: 200, h: 20 },
+    ],
+    spikes: [
+      { x: 700, y: 688, w: 60, h: 16 },
+      { x: 1600, y: 688, w: 80, h: 16 },
+      { x: 2400, y: 688, w: 60, h: 16 },
+      { x: 3600, y: 688, w: 80, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 500,  y: 672, w: 64, h: 24, id: 'plateG',  opensGate: 'gateG' },
+      { x: 1100, y: 672, w: 64, h: 24, id: 'plateG2', opensGate: 'gateG' },
+      { x: 1900, y: 672, w: 64, h: 24, id: 'plateH',  opensGate: 'gateH' },
+      { x: 2500, y: 672, w: 64, h: 24, id: 'plateH2', opensGate: 'gateH' },
+      { x: 3200, y: 672, w: 64, h: 24, id: 'plateI',  opensGate: 'gateI' },
+      { x: 3700, y: 672, w: 64, h: 24, id: 'plateI2', opensGate: 'gateI' },
+    ],
+    gates: [
+      { x: 1050, y: 634, w: 24, h: 132, id: 'gateG' },
+      { x: 2100, y: 634, w: 24, h: 132, id: 'gateH' },
+      { x: 3500, y: 634, w: 24, h: 132, id: 'gateI' },
+    ],
+    movingPlatforms: [
+      { x: 1350, y: 580, w: 120, h: 20, moveX: 120, moveY: 0, speed: 65 },
+      { x: 2050, y: 540, w: 120, h: 20, moveX: 0, moveY: 110, speed: 55 },
+      { x: 2800, y: 580, w: 120, h: 20, moveX: 140, moveY: 0, speed: 70 },
+      { x: 3600, y: 520, w: 120, h: 20, moveX: 0, moveY: 120, speed: 60 },
+    ],
+    lasers: [
+      { x: 900,  y: 480, w: 6, h: 240, onTime: 1600, offTime: 1500 },
+      { x: 1500, y: 400, w: 6, h: 320, onTime: 1400, offTime: 1600 },
+      { x: 2300, y: 450, w: 6, h: 270, onTime: 1500, offTime: 1400 },
+      { x: 3400, y: 420, w: 6, h: 300, onTime: 1300, offTime: 1500 },
+    ],
+    hearts: [
+      { x: 600, y: 500 },
+      { x: 2050, y: 500 },
+      { x: 3600, y: 480 },
+    ],
+  },
+
+  6: {
+    name: 'FINAL',
+    theme: 'fire',
+    width: 5200,
+    height: 720,
+    spawns: [
+      { x: 100, y: 650 },
+      { x: 170, y: 650 },
+      { x: 240, y: 650 },
+      { x: 310, y: 650 },
+    ],
+    exit: { x: 5000, y: 268 },
+    platforms: [
+      { x: 500, y: 700, w: 1000, h: 32 },
+      { x: 1200, y: 700, w: 120, h: 32 },
+      { x: 1600, y: 700, w: 500, h: 32 },
+      { x: 2200, y: 700, w: 400, h: 32 },
+      { x: 2700, y: 700, w: 200, h: 32 },
+      { x: 3100, y: 700, w: 400, h: 32 },
+      { x: 3600, y: 700, w: 200, h: 32 },
+      { x: 4000, y: 700, w: 400, h: 32 },
+      { x: 4500, y: 700, w: 200, h: 32 },
+      { x: 4900, y: 700, w: 600, h: 32 },
+      { x: 350, y: 610, w: 160, h: 20 },
+      { x: 600, y: 530, w: 160, h: 20 },
+      { x: 850, y: 460, w: 160, h: 20 },
+      { x: 1600, y: 600, w: 160, h: 20 },
+      { x: 2200, y: 580, w: 160, h: 20 },
+      { x: 2700, y: 520, w: 140, h: 20 },
+      { x: 3100, y: 580, w: 160, h: 20 },
+      { x: 3600, y: 520, w: 140, h: 20 },
+      { x: 4000, y: 580, w: 160, h: 20 },
+      { x: 4850, y: 610, w: 180, h: 20 },
+      { x: 5000, y: 530, w: 180, h: 20 },
+      { x: 4850, y: 450, w: 180, h: 20 },
+      { x: 5000, y: 370, w: 180, h: 20 },
+      { x: 5000, y: 300, w: 200, h: 20 },
+    ],
+    spikes: [
+      { x: 700, y: 688, w: 80, h: 16 },
+      { x: 1600, y: 688, w: 80, h: 16 },
+      { x: 2400, y: 688, w: 60, h: 16 },
+      { x: 3300, y: 688, w: 80, h: 16 },
+      { x: 4200, y: 688, w: 60, h: 16 },
+    ],
+    pressurePlates: [
+      { x: 500,  y: 672, w: 64, h: 24, id: 'plateJ',  opensGate: 'gateJ' },
+      { x: 1100, y: 672, w: 64, h: 24, id: 'plateJ2', opensGate: 'gateJ' },
+      { x: 1900, y: 672, w: 64, h: 24, id: 'plateK',  opensGate: 'gateK' },
+      { x: 2500, y: 672, w: 64, h: 24, id: 'plateK2', opensGate: 'gateK' },
+      { x: 3000, y: 672, w: 64, h: 24, id: 'plateL',  opensGate: 'gateL' },
+      { x: 3500, y: 672, w: 64, h: 24, id: 'plateL2', opensGate: 'gateL' },
+      { x: 4100, y: 672, w: 64, h: 24, id: 'plateM',  opensGate: 'gateM' },
+      { x: 4600, y: 672, w: 64, h: 24, id: 'plateM2', opensGate: 'gateM' },
+    ],
+    gates: [
+      { x: 1050, y: 634, w: 24, h: 132, id: 'gateJ' },
+      { x: 2100, y: 634, w: 24, h: 132, id: 'gateK' },
+      { x: 3400, y: 634, w: 24, h: 132, id: 'gateL' },
+      { x: 4650, y: 634, w: 24, h: 132, id: 'gateM' },
+    ],
+    movingPlatforms: [
+      { x: 1350, y: 580, w: 120, h: 20, moveX: 130, moveY: 0, speed: 70 },
+      { x: 2050, y: 540, w: 100, h: 20, moveX: 0, moveY: 120, speed: 60 },
+      { x: 2600, y: 580, w: 100, h: 20, moveX: 120, moveY: 0, speed: 75 },
+      { x: 3300, y: 540, w: 100, h: 20, moveX: 0, moveY: 110, speed: 65 },
+      { x: 3900, y: 580, w: 100, h: 20, moveX: 130, moveY: 0, speed: 70 },
+      { x: 4400, y: 540, w: 100, h: 20, moveX: 0, moveY: 120, speed: 60 },
+    ],
+    lasers: [
+      { x: 900,  y: 460, w: 6, h: 260, onTime: 1500, offTime: 1400 },
+      { x: 1500, y: 380, w: 6, h: 340, onTime: 1300, offTime: 1500 },
+      { x: 2300, y: 430, w: 6, h: 290, onTime: 1400, offTime: 1300 },
+      { x: 3200, y: 400, w: 6, h: 320, onTime: 1200, offTime: 1400 },
+      { x: 4300, y: 440, w: 6, h: 280, onTime: 1300, offTime: 1200 },
+    ],
+    hearts: [
+      { x: 850, y: 430 },
+      { x: 2050, y: 500 },
+      { x: 3300, y: 500 },
+      { x: 4400, y: 500 },
+    ],
   },
 };
 
@@ -242,7 +513,7 @@ class BootScene extends Phaser.Scene {
   create() {
     initAudio();
 
-    // Generate player textures for all 4 colors
+    // Generate player textures for all 4 colors (default = smiley)
     PLAYER_COLORS.forEach((color, i) => {
       const g = this.make.graphics({ add: false });
       g.fillStyle(color, 0.2);
@@ -257,6 +528,69 @@ class BootScene extends Phaser.Scene {
       g.fillRect(22, 16, 3, 3);
       g.generateTexture(PLAYER_KEYS[i], 36, 52);
       g.destroy();
+    });
+
+    // Generate face textures: 4 colors x 3 face types
+    PLAYER_COLORS.forEach((color, i) => {
+      FACE_TYPES.forEach(face => {
+        const g = this.make.graphics({ add: false });
+        // Body
+        g.fillStyle(color, 0.2);
+        g.fillRoundedRect(0, 0, 36, 52, 6);
+        g.fillStyle(color, 1);
+        g.fillRoundedRect(4, 4, 28, 44, 4);
+
+        if (face === 'smiley') {
+          // Eyes
+          g.fillStyle(0xffffff, 1);
+          g.fillRect(10, 14, 6, 6);
+          g.fillRect(20, 14, 6, 6);
+          g.fillStyle(0x000000, 1);
+          g.fillRect(12, 16, 3, 3);
+          g.fillRect(22, 16, 3, 3);
+          // Smile
+          g.lineStyle(2, 0xffffff, 0.8);
+          g.beginPath();
+          g.arc(18, 28, 6, 0.2, Math.PI - 0.2, false);
+          g.strokePath();
+        } else if (face === 'crazy') {
+          // Spiral eyes (different sizes)
+          g.fillStyle(0xffffff, 1);
+          g.fillCircle(13, 16, 5);
+          g.fillCircle(23, 16, 4);
+          g.fillStyle(0x000000, 1);
+          g.fillCircle(14, 15, 2);
+          g.fillCircle(22, 17, 2);
+          // Zigzag mouth
+          g.lineStyle(2, 0xffffff, 0.9);
+          g.beginPath();
+          g.moveTo(10, 30); g.lineTo(14, 26); g.lineTo(18, 32);
+          g.lineTo(22, 26); g.lineTo(26, 30);
+          g.strokePath();
+        } else if (face === 'angry') {
+          // Angry brow lines
+          g.lineStyle(2, 0xffffff, 0.9);
+          g.beginPath();
+          g.moveTo(8, 12); g.lineTo(16, 14);
+          g.moveTo(28, 12); g.lineTo(20, 14);
+          g.strokePath();
+          // Eyes
+          g.fillStyle(0xffffff, 1);
+          g.fillRect(10, 16, 6, 5);
+          g.fillRect(20, 16, 6, 5);
+          g.fillStyle(0xff0000, 1);
+          g.fillRect(12, 17, 3, 3);
+          g.fillRect(22, 17, 3, 3);
+          // Frown
+          g.lineStyle(2, 0xffffff, 0.8);
+          g.beginPath();
+          g.arc(18, 34, 6, Math.PI + 0.2, -0.2, false);
+          g.strokePath();
+        }
+
+        g.generateTexture(`player${i}_${face}`, 36, 52);
+        g.destroy();
+      });
     });
 
     // Platform
@@ -311,6 +645,15 @@ class BootScene extends Phaser.Scene {
     gl.fillStyle(0xff0000, 1); gl.fillRect(1, 0, 4, 8);
     gl.generateTexture('laser', 6, 8); gl.destroy();
 
+    // Heart Pickup
+    const gh = this.make.graphics({ add: false });
+    gh.fillStyle(0xff0044, 1);
+    gh.fillCircle(6, 6, 6); gh.fillCircle(18, 6, 6);
+    gh.fillTriangle(0, 8, 12, 22, 24, 8);
+    gh.fillStyle(0xff4466, 0.6);
+    gh.fillCircle(7, 5, 3);
+    gh.generateTexture('heartPickup', 24, 22); gh.destroy();
+
     const startScene = this.game._isViewer ? 'ViewerGameScene' : 'GameScene';
     this.scene.start(startScene, { level: 1 });
   }
@@ -338,14 +681,25 @@ class GameScene extends Phaser.Scene {
   create() {
     const levelData = LEVELS[this.currentLevel];
     if (!levelData) return;
+    const theme = WORLD_THEMES[levelData.theme || 'cyan'];
 
     // --- World bounds ---
     this.physics.world.setBounds(0, 0, levelData.width, levelData.height);
-    this.cameras.main.setBackgroundColor('#000000');
+    this.cameras.main.setBackgroundColor(theme.bgStr);
+
+    // --- Parallax stars ---
+    for (let i = 0; i < 60; i++) {
+      const sx = Phaser.Math.Between(0, levelData.width);
+      const sy = Phaser.Math.Between(0, levelData.height);
+      const size = Phaser.Math.FloatBetween(0.5, 2);
+      const alpha = Phaser.Math.FloatBetween(0.1, 0.4);
+      const star = this.add.circle(sx, sy, size, 0xffffff, alpha);
+      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.25));
+    }
 
     // --- Background grid ---
     const bg = this.add.graphics();
-    bg.lineStyle(1, 0x0a1a2a, 0.3);
+    bg.lineStyle(1, theme.grid, 0.3);
     for (let x = 0; x < levelData.width; x += 64) { bg.moveTo(x, 0); bg.lineTo(x, levelData.height); }
     for (let y = 0; y < levelData.height; y += 64) { bg.moveTo(0, y); bg.lineTo(levelData.width, y); }
     bg.strokePath();
@@ -361,19 +715,21 @@ class GameScene extends Phaser.Scene {
     // --- Platforms ---
     this.platforms = this.physics.add.staticGroup();
     levelData.platforms.forEach(p => {
-      this.add.rectangle(p.x, p.y, p.w + 6, p.h + 6, 0x00ffff, 0.08);
+      this.add.rectangle(p.x, p.y, p.w + 6, p.h + 6, theme.platformGlow, 0.08);
       const plat = this.platforms.create(p.x, p.y, 'platform');
       plat.setDisplaySize(p.w, p.h); plat.refreshBody();
+      plat.setTint(theme.platform);
     });
 
     // --- Spikes ---
     this.spikes = this.physics.add.staticGroup();
     levelData.spikes.forEach(s => {
-      this.add.rectangle(s.x, s.y, s.w + 8, s.h + 8, 0xff0044, 0.15);
+      this.add.rectangle(s.x, s.y, s.w + 8, s.h + 8, theme.spike, 0.15);
       const numSpikes = Math.floor(s.w / 16);
       for (let i = 0; i < numSpikes; i++) {
         const sx = s.x - s.w / 2 + i * 16 + 8;
-        this.spikes.create(sx, s.y, 'spike');
+        const sp = this.spikes.create(sx, s.y, 'spike');
+        sp.setTint(theme.spike);
       }
     });
 
@@ -395,7 +751,7 @@ class GameScene extends Phaser.Scene {
     this.gateObjects = new Map();
     this.gatesGroup = this.physics.add.staticGroup();
     levelData.gates.forEach(g => {
-      const glow = this.add.rectangle(g.x, g.y, g.w + 10, g.h + 10, 0xff00ff, 0.1);
+      const glow = this.add.rectangle(g.x, g.y, g.w + 10, g.h + 10, theme.gate, 0.1);
       const gate = this.gatesGroup.create(g.x, g.y, 'gate');
       gate.setDisplaySize(g.w, g.h);
       gate.body.setSize(g.w, g.h);
@@ -404,6 +760,7 @@ class GameScene extends Phaser.Scene {
       gate.setData('id', g.id);
       gate.setData('glow', glow);
       gate.setData('wasOpen', false);
+      gate.setTint(theme.gate);
       this.gateObjects.set(g.id, gate);
     });
 
@@ -440,7 +797,8 @@ class GameScene extends Phaser.Scene {
       const laser = this.lasersGroup.create(l.x, l.y, 'laser');
       laser.setDisplaySize(l.w, l.h); laser.body.setSize(l.w, l.h);
       laser.setData('config', { onTime: l.onTime, offTime: l.offTime, offset: Math.random() * (l.onTime + l.offTime) });
-      const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, 0xff0000, 0.15);
+      laser.setTint(theme.laser);
+      const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, theme.laser, 0.15);
       laser.setData('glow', glow);
       this.laserObjects.push(laser);
     });
@@ -451,14 +809,34 @@ class GameScene extends Phaser.Scene {
     this.exitGlow = this.add.rectangle(levelData.exit.x, levelData.exit.y, 60, 76, 0x00ff00, 0.1);
     this.tweens.add({ targets: this.exitGlow, alpha: { from: 0.05, to: 0.2 }, scaleX: { from: 1, to: 1.1 }, scaleY: { from: 1, to: 1.1 }, duration: 1000, yoyo: true, repeat: -1 });
 
+    // --- Collectible Hearts ---
+    this.heartPickups = this.physics.add.staticGroup();
+    this.collectedHearts = new Set();
+    if (levelData.hearts) {
+      levelData.hearts.forEach((h, idx) => {
+        const heart = this.heartPickups.create(h.x, h.y, 'heartPickup');
+        heart.setData('heartIndex', idx);
+        heart.refreshBody();
+        // Glow
+        const glow = this.add.circle(h.x, h.y, 16, 0xff0044, 0.12);
+        heart.setData('glow', glow);
+        // Bob animation
+        this.tweens.add({
+          targets: [heart, glow], y: h.y - 8, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+      });
+    }
+
     // --- Players (dynamic count) ---
     this.players = [];
     this.playerLabels = [];
     const names = this._playerNames || {};
+    const faces = this.game._playerFaces || {};
 
     for (let i = 0; i < this.playerCount; i++) {
       const spawn = levelData.spawns[i] || levelData.spawns[0];
-      const p = this.physics.add.sprite(spawn.x, spawn.y, PLAYER_KEYS[i]);
+      const tex = getPlayerTexture(i, faces[i]);
+      const p = this.physics.add.sprite(spawn.x, spawn.y, tex);
       p.setBounce(0.05);
       p.setCollideWorldBounds(true);
       p.body.setMaxVelocity(200, 500);
@@ -482,6 +860,7 @@ class GameScene extends Phaser.Scene {
       this.physics.add.collider(p, this.movingPlatformsGroup);
       this.physics.add.overlap(p, this.spikes, this.onHazardHit, null, this);
       this.physics.add.overlap(p, this.lasersGroup, this.onLaserHit, null, this);
+      this.physics.add.overlap(p, this.heartPickups, this.onHeartPickup, null, this);
     });
 
     // --- Input state (all 4 slots) ---
@@ -518,9 +897,9 @@ class GameScene extends Phaser.Scene {
   // === HUD ===
   buildHUD() {
     this.heartIcons = [];
-    for (let i = 0; i < 3; i++) {
-      const heart = this.add.text(24 + i * 32, 56, '\u2764', {
-        fontSize: '24px', color: '#ff0044',
+    for (let i = 0; i < 5; i++) {
+      const heart = this.add.text(24 + i * 28, 56, '\u2764', {
+        fontSize: '20px', color: '#ff0044',
       }).setScrollFactor(0).setDepth(250).setAlpha(i < this.lives ? 1 : 0.15);
       this.heartIcons.push(heart);
     }
@@ -531,6 +910,38 @@ class GameScene extends Phaser.Scene {
 
   updateHeartsDisplay() {
     this.heartIcons.forEach((h, i) => { h.setAlpha(i < this.lives ? 1 : 0.15); });
+  }
+
+  onHeartPickup(player, heart) {
+    const idx = heart.getData('heartIndex');
+    if (this.collectedHearts.has(idx)) return;
+    this.collectedHearts.add(idx);
+
+    if (this.lives < 5) {
+      this.lives += 1;
+      this.updateHeartsDisplay();
+      if (this._socket && this._roomCode) {
+        this._socket.emit('heart-collected', { roomCode: this._roomCode, heartIndex: idx });
+      }
+    }
+
+    playSound('heartPickup');
+
+    // Particle burst
+    for (let i = 0; i < 8; i++) {
+      const px = heart.x + Phaser.Math.Between(-10, 10);
+      const py = heart.y + Phaser.Math.Between(-10, 10);
+      const c = this.add.circle(px, py, Phaser.Math.Between(2, 5), 0xff0044, 0.8);
+      this.tweens.add({
+        targets: c, y: py - Phaser.Math.Between(20, 50), alpha: 0, scaleX: 0, scaleY: 0,
+        duration: 400, onComplete: () => c.destroy(),
+      });
+    }
+
+    // Remove heart + glow
+    const glow = heart.getData('glow');
+    if (glow) glow.destroy();
+    heart.destroy();
   }
 
   updateScoreDisplay() {
@@ -596,7 +1007,7 @@ class GameScene extends Phaser.Scene {
 
     // Broadcast state to viewers (~15 fps)
     if (this._socket && this._roomCode) {
-      if (!this._lastBroadcast || time - this._lastBroadcast > 66) {
+      if (!this._lastBroadcast || time - this._lastBroadcast > 33) {
         this._lastBroadcast = time;
         const playerStates = this.players.map((p, i) => ({
           idx: i, x: Math.round(p.x), y: Math.round(p.y),
@@ -613,6 +1024,7 @@ class GameScene extends Phaser.Scene {
           players: playerStates,
           plates: pressedPlates,
           gates: openGates,
+          collectedHearts: [...this.collectedHearts],
         });
       }
     }
@@ -771,6 +1183,7 @@ class GameScene extends Phaser.Scene {
     if (this.isResetting || this.levelCompleted) return;
     this.isResetting = true;
     playSound('failure');
+    this.cameras.main.shake(300, 0.015);
     this.lives -= 1;
 
     if (this.heartIcons[this.lives]) {
@@ -844,7 +1257,7 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    if (this.currentLevel < 3) {
+    if (this.currentLevel < 6) {
       const nextLevel = this.currentLevel + 1;
       if (this._socket && this._roomCode) {
         this._socket.emit('level-complete', { roomCode: this._roomCode, nextLevel, levelTime });
@@ -893,15 +1306,26 @@ class ViewerGameScene extends Phaser.Scene {
   create() {
     const levelData = LEVELS[this.currentLevel];
     if (!levelData) return;
+    const theme = WORLD_THEMES[levelData.theme || 'cyan'];
 
     // --- World bounds ---
     this.physics.world.setBounds(0, 0, levelData.width, levelData.height);
     this.physics.world.gravity.y = 0; // No gravity for viewer
-    this.cameras.main.setBackgroundColor('#000000');
+    this.cameras.main.setBackgroundColor(theme.bgStr);
+
+    // --- Parallax stars ---
+    for (let i = 0; i < 60; i++) {
+      const sx = Phaser.Math.Between(0, levelData.width);
+      const sy = Phaser.Math.Between(0, levelData.height);
+      const size = Phaser.Math.FloatBetween(0.5, 2);
+      const alpha = Phaser.Math.FloatBetween(0.1, 0.4);
+      const star = this.add.circle(sx, sy, size, 0xffffff, alpha);
+      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.25));
+    }
 
     // --- Background grid ---
     const bg = this.add.graphics();
-    bg.lineStyle(1, 0x0a1a2a, 0.3);
+    bg.lineStyle(1, theme.grid, 0.3);
     for (let x = 0; x < levelData.width; x += 64) { bg.moveTo(x, 0); bg.lineTo(x, levelData.height); }
     for (let y = 0; y < levelData.height; y += 64) { bg.moveTo(0, y); bg.lineTo(levelData.width, y); }
     bg.strokePath();
@@ -916,18 +1340,20 @@ class ViewerGameScene extends Phaser.Scene {
 
     // --- Platforms (visual only) ---
     levelData.platforms.forEach(p => {
-      this.add.rectangle(p.x, p.y, p.w + 6, p.h + 6, 0x00ffff, 0.08);
+      this.add.rectangle(p.x, p.y, p.w + 6, p.h + 6, theme.platformGlow, 0.08);
       const plat = this.add.image(p.x, p.y, 'platform');
       plat.setDisplaySize(p.w, p.h);
+      plat.setTint(theme.platform);
     });
 
     // --- Spikes (visual only) ---
     levelData.spikes.forEach(s => {
-      this.add.rectangle(s.x, s.y, s.w + 8, s.h + 8, 0xff0044, 0.15);
+      this.add.rectangle(s.x, s.y, s.w + 8, s.h + 8, theme.spike, 0.15);
       const numSpikes = Math.floor(s.w / 16);
       for (let i = 0; i < numSpikes; i++) {
         const sx = s.x - s.w / 2 + i * 16 + 8;
-        this.add.image(sx, s.y, 'spike');
+        const sp = this.add.image(sx, s.y, 'spike');
+        sp.setTint(theme.spike);
       }
     });
 
@@ -944,11 +1370,12 @@ class ViewerGameScene extends Phaser.Scene {
     // --- Gates (visual) ---
     this.gateObjects = new Map();
     levelData.gates.forEach(g => {
-      const glow = this.add.rectangle(g.x, g.y, g.w + 10, g.h + 10, 0xff00ff, 0.1);
+      const glow = this.add.rectangle(g.x, g.y, g.w + 10, g.h + 10, theme.gate, 0.1);
       const gate = this.add.image(g.x, g.y, 'gate');
       gate.setDisplaySize(g.w, g.h);
       gate.setData('id', g.id);
       gate.setData('glow', glow);
+      gate.setTint(theme.gate);
       this.gateObjects.set(g.id, gate);
     });
 
@@ -992,7 +1419,8 @@ class ViewerGameScene extends Phaser.Scene {
       const laser = this.add.image(l.x, l.y, 'laser');
       laser.setDisplaySize(l.w, l.h);
       laser.setData('config', { onTime: l.onTime, offTime: l.offTime, offset: Math.random() * (l.onTime + l.offTime) });
-      const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, 0xff0000, 0.15);
+      laser.setTint(theme.laser);
+      const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, theme.laser, 0.15);
       laser.setData('glow', glow);
       this.laserObjects.push(laser);
     });
@@ -1003,14 +1431,31 @@ class ViewerGameScene extends Phaser.Scene {
     this.exitGlow = this.add.rectangle(levelData.exit.x, levelData.exit.y, 60, 76, 0x00ff00, 0.1);
     this.tweens.add({ targets: this.exitGlow, alpha: { from: 0.05, to: 0.2 }, scaleX: { from: 1, to: 1.1 }, scaleY: { from: 1, to: 1.1 }, duration: 1000, yoyo: true, repeat: -1 });
 
+    // --- Collectible Hearts (visual) ---
+    this.heartPickupSprites = [];
+    if (levelData.hearts) {
+      levelData.hearts.forEach((h, idx) => {
+        const heart = this.add.image(h.x, h.y, 'heartPickup');
+        heart.setData('heartIndex', idx);
+        const glow = this.add.circle(h.x, h.y, 16, 0xff0044, 0.12);
+        heart.setData('glow', glow);
+        this.tweens.add({
+          targets: [heart, glow], y: h.y - 8, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        this.heartPickupSprites.push(heart);
+      });
+    }
+
     // --- Players (sprites only, no physics) ---
     this.players = [];
     this.playerLabels = [];
     const names = this._playerNames || {};
+    const faces = this.game._playerFaces || {};
 
     for (let i = 0; i < this.playerCount; i++) {
       const spawn = levelData.spawns[i] || levelData.spawns[0];
-      const p = this.add.sprite(spawn.x, spawn.y, PLAYER_KEYS[i]);
+      const tex = getPlayerTexture(i, faces[i]);
+      const p = this.add.sprite(spawn.x, spawn.y, tex);
       p.setDepth(10);
       p.playerIndex = i;
       p.targetX = spawn.x;
@@ -1034,9 +1479,9 @@ class ViewerGameScene extends Phaser.Scene {
 
     // --- HUD ---
     this.heartIcons = [];
-    for (let i = 0; i < 3; i++) {
-      const heart = this.add.text(24 + i * 32, 56, '\u2764', {
-        fontSize: '24px', color: '#ff0044',
+    for (let i = 0; i < 5; i++) {
+      const heart = this.add.text(24 + i * 28, 56, '\u2764', {
+        fontSize: '20px', color: '#ff0044',
       }).setScrollFactor(0).setDepth(250).setAlpha(i < this.lives ? 1 : 0.15);
       this.heartIcons.push(heart);
     }
@@ -1082,13 +1527,25 @@ class ViewerGameScene extends Phaser.Scene {
             if (glow) glow.setAlpha(isOpen ? 0.03 : 0.1);
           }
         }
+        // Remove collected hearts
+        if (data.collectedHearts) {
+          data.collectedHearts.forEach(idx => {
+            const hs = this.heartPickupSprites[idx];
+            if (hs && hs.active) {
+              const glow = hs.getData('glow');
+              if (glow) glow.destroy();
+              hs.destroy();
+            }
+          });
+        }
       });
 
       this._socket.off('lives-update');
       this._socket.on('lives-update', ({ lives }) => {
         this.lives = lives;
         this.heartIcons.forEach((h, i) => { h.setAlpha(i < this.lives ? 1 : 0.15); });
-        // Death flash
+        // Death flash + shake
+        this.cameras.main.shake(300, 0.015);
         this.tweens.add({ targets: this.deathFlash, alpha: { from: 0.4, to: 0 }, duration: 500 });
       });
 
@@ -1337,7 +1794,7 @@ class GameOverScene extends Phaser.Scene {
 // ============================================================
 // CREATE GAME — Called from index.html when game starts
 // ============================================================
-function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, isViewer) {
+function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, isViewer, playerFaces) {
   const scenes = isViewer
     ? [BootScene, ViewerGameScene, VictoryScene, GameOverScene]
     : [BootScene, GameScene, VictoryScene, GameOverScene];
@@ -1361,6 +1818,7 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, is
   game._playerCount = playerCount || 2;
   game._humanPlayers = humanPlayers || [0, 1];
   game._isViewer = isViewer || false;
+  game._playerFaces = playerFaces || {};
   game._finalScore = 0;
   game._finalLives = 0;
 

@@ -31,6 +31,7 @@ function getLocalIP() {
 // --- Room Management ---
 const rooms = new Map();
 const hostDisconnectTimers = new Map(); // Grace period for host refresh
+const playerDisconnectTimers = new Map(); // Grace period for player refresh
 
 function generateRoomCode() {
   let code;
@@ -55,7 +56,8 @@ function buildPlayerList(room) {
   return [...room.players.values()].map(p => ({
     nickname: p.nickname,
     playerIndex: p.playerIndex,
-    ready: p.ready
+    ready: p.ready,
+    face: p.face || 'smiley',
   }));
 }
 
@@ -185,7 +187,8 @@ io.on('connection', (socket) => {
     room.players.set(socket.id, {
       nickname: nickname || `Player ${playerIndex + 1}`,
       ready: false,
-      playerIndex
+      playerIndex,
+      face: 'smiley',
     });
 
     socket.join(roomCode);
@@ -196,6 +199,57 @@ io.on('connection', (socket) => {
     socket.emit('join-success', { playerIndex });
 
     console.log(`[join] ${nickname} → room ${roomCode} as P${playerIndex}`);
+  });
+
+  // Player rejoins after disconnect (during gameplay)
+  socket.on('player-rejoin', ({ roomCode, playerIndex }) => {
+    const room = rooms.get(roomCode);
+
+    if (!room) {
+      socket.emit('rejoin-failed', { reason: 'room-not-found' });
+      return;
+    }
+
+    // Check if there's a grace period reservation for this player index
+    const timerKey = `${roomCode}_${playerIndex}`;
+    const timerEntry = playerDisconnectTimers.get(timerKey);
+
+    if (!timerEntry) {
+      // Check if that player slot is actually free
+      const slotTaken = [...room.players.values()].some(p => p.playerIndex === playerIndex);
+      if (slotTaken) {
+        socket.emit('rejoin-failed', { reason: 'slot-taken' });
+        return;
+      }
+      socket.emit('rejoin-failed', { reason: 'no-reservation' });
+      return;
+    }
+
+    // Cancel the timer and reclaim the slot
+    clearTimeout(timerEntry.timeout);
+    playerDisconnectTimers.delete(timerKey);
+
+    room.players.set(socket.id, {
+      nickname: timerEntry.nickname,
+      ready: true,
+      playerIndex,
+      face: timerEntry.face || 'smiley',
+    });
+
+    socket.join(roomCode);
+    socket.data.roomCode = roomCode;
+
+    socket.emit('rejoin-success', {
+      playerIndex,
+      gameState: room.gameState,
+      currentLevel: room.currentLevel,
+      lives: room.lives,
+      score: room.score,
+    });
+
+    // Notify host that player is back
+    io.to(room.hostSocketId).emit('player-rejoined', { playerIndex });
+    console.log(`[player-rejoin] P${playerIndex} back in room ${roomCode}`);
   });
 
   // Player ready
@@ -225,13 +279,44 @@ io.on('connection', (socket) => {
       // Figure out which indices are human vs AI
       const humanPlayers = [...room.players.values()].map(p => p.playerIndex).sort();
 
+      // Build faces map
+      const faces = {};
+      for (const [, p] of room.players) {
+        faces[p.playerIndex] = p.face || 'smiley';
+      }
+
       io.to(roomCode).emit('game-start', {
         level: 1,
         lives: 3,
         playerCount: room.playerCount,
         humanPlayers,
+        faces,
       });
       console.log(`[game-start] room ${roomCode} (${room.playerCount}P, humans: [${humanPlayers}])`);
+    }
+  });
+
+  // Player selects face
+  socket.on('player-face-select', ({ roomCode, face }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.get(socket.id);
+    if (!player) return;
+    const validFaces = ['smiley', 'crazy', 'angry'];
+    if (validFaces.includes(face)) {
+      player.face = face;
+      const playerList = buildPlayerList(room);
+      io.to(roomCode).emit('player-ready-update', { playerList });
+    }
+  });
+
+  // Heart collected (sync lives)
+  socket.on('heart-collected', ({ roomCode, heartIndex }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.lives < 5) {
+      room.lives += 1;
+      io.to(roomCode).emit('lives-update', { lives: room.lives });
     }
   });
 
@@ -444,17 +529,42 @@ io.on('connection', (socket) => {
       });
     } else {
       // Player left
+      const player = room.players.get(socket.id);
+      const playerNickname = player ? player.nickname : 'Unknown';
+      const playerFace = player ? player.face : 'smiley';
       room.players.delete(socket.id);
-      io.to(info.code).emit('player-left', { playerIndex: info.playerIndex });
 
-      // If game was playing, notify host
       if (room.gameState === 'playing') {
-        io.to(room.hostSocketId).emit('player-disconnected', {
+        // During gameplay — start grace period for reconnection (30s)
+        const timerKey = `${info.code}_${info.playerIndex}`;
+        console.log(`[player-temp-disconnect] P${info.playerIndex} from room ${info.code} — starting 30s grace period`);
+
+        io.to(room.hostSocketId).emit('player-temporarily-disconnected', {
           playerIndex: info.playerIndex
         });
-      }
 
-      console.log(`[player-left] P${info.playerIndex} from room ${info.code}`);
+        const timeout = setTimeout(() => {
+          playerDisconnectTimers.delete(timerKey);
+          // Player never came back — permanent leave
+          io.to(info.code).emit('player-left', { playerIndex: info.playerIndex });
+          io.to(room.hostSocketId).emit('player-disconnected', {
+            playerIndex: info.playerIndex
+          });
+          console.log(`[player-left] P${info.playerIndex} from room ${info.code} (grace period expired)`);
+        }, 30000);
+
+        playerDisconnectTimers.set(timerKey, {
+          timeout,
+          nickname: playerNickname,
+          face: playerFace,
+          playerIndex: info.playerIndex,
+          disconnectedAt: Date.now(),
+        });
+      } else {
+        // In lobby — immediate leave
+        io.to(info.code).emit('player-left', { playerIndex: info.playerIndex });
+        console.log(`[player-left] P${info.playerIndex} from room ${info.code}`);
+      }
     }
   });
 });

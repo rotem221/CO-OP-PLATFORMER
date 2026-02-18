@@ -132,6 +132,27 @@
       min-height: 3em;
     }
 
+    /* Face selection */
+    #face-select {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+    .face-btn {
+      width: 60px; height: 60px;
+      font-size: 2rem;
+      background: #111;
+      border: 2px solid #333;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .face-btn.selected {
+      border-color: #0ff;
+      box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+      background: rgba(0, 255, 255, 0.1);
+    }
+
     /* --- Controls Screen --- */
     #controls-screen {
       display: none;
@@ -292,6 +313,12 @@
   <div id="ready-screen">
     <p style="color:#888">You are</p>
     <div id="player-color"></div>
+    <p style="color:#666; font-size:0.8rem; margin-top:4px;">Choose your face:</p>
+    <div id="face-select">
+      <button class="face-btn selected" data-face="smiley">&#128522;</button>
+      <button class="face-btn" data-face="crazy">&#129322;</button>
+      <button class="face-btn" data-face="angry">&#128544;</button>
+    </div>
     <button id="ready-btn">READY</button>
     <div id="ready-status"></div>
   </div>
@@ -333,6 +360,7 @@
     // --- State ---
     let myRoomCode = null;
     let myPlayerIndex = null;
+    let myFace = 'smiley';
     const inputState = { left: false, right: false, jump: false };
 
     // Pre-fill room code from URL
@@ -344,6 +372,43 @@
 
     // --- Socket ---
     const socket = io();
+
+    // --- Reconnection from sessionStorage ---
+    const savedRoom = sessionStorage.getItem('coop_roomCode');
+    const savedIndex = sessionStorage.getItem('coop_playerIndex');
+    if (savedRoom && savedIndex !== null) {
+      myRoomCode = savedRoom;
+      myPlayerIndex = parseInt(savedIndex, 10);
+      socket.emit('player-rejoin', { roomCode: savedRoom, playerIndex: myPlayerIndex });
+    }
+
+    socket.on('rejoin-success', ({ playerIndex, gameState, currentLevel, lives }) => {
+      myPlayerIndex = playerIndex;
+      if (gameState === 'playing') {
+        showScreen('controls-screen');
+        document.getElementById('level-display').textContent = `LEVEL ${currentLevel}`;
+        const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
+        document.getElementById('lives-display').textContent = heartsStr;
+        requestWakeLock();
+      } else {
+        // Back to lobby
+        const colorEl = document.getElementById('player-color');
+        const colors = ['CYAN', 'MAGENTA', 'YELLOW', 'GREEN'];
+        const cssClasses = ['cyan', 'magenta', 'yellow', 'green'];
+        colorEl.textContent = colors[playerIndex] || colors[0];
+        colorEl.className = cssClasses[playerIndex] || cssClasses[0];
+        showScreen('ready-screen');
+      }
+    });
+
+    socket.on('rejoin-failed', () => {
+      // Clear saved data and show join screen
+      sessionStorage.removeItem('coop_roomCode');
+      sessionStorage.removeItem('coop_playerIndex');
+      myRoomCode = null;
+      myPlayerIndex = null;
+      showScreen('join-screen');
+    });
 
     // --- Screen management ---
     function showScreen(id) {
@@ -383,12 +448,28 @@
 
     socket.on('join-success', ({ playerIndex }) => {
       myPlayerIndex = playerIndex;
+      // Save for reconnection
+      sessionStorage.setItem('coop_roomCode', myRoomCode);
+      sessionStorage.setItem('coop_playerIndex', String(playerIndex));
+
       const colorEl = document.getElementById('player-color');
       const colors = ['CYAN', 'MAGENTA', 'YELLOW', 'GREEN'];
       const cssClasses = ['cyan', 'magenta', 'yellow', 'green'];
       colorEl.textContent = colors[playerIndex] || colors[0];
       colorEl.className = cssClasses[playerIndex] || cssClasses[0];
       showScreen('ready-screen');
+    });
+
+    // --- Face Selection ---
+    document.querySelectorAll('.face-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.face-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        myFace = btn.dataset.face;
+        if (myRoomCode) {
+          socket.emit('player-face-select', { roomCode: myRoomCode, face: myFace });
+        }
+      });
     });
 
     socket.on('join-error', ({ message }) => {
@@ -575,6 +656,8 @@
     });
 
     socket.on('room-closed', () => {
+      sessionStorage.removeItem('coop_roomCode');
+      sessionStorage.removeItem('coop_playerIndex');
       alert('Host disconnected. Room closed.');
       location.reload();
     });

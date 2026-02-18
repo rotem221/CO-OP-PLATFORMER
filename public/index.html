@@ -229,6 +229,42 @@
     }
     #back-to-host-btn:hover { color: #888; border-color: #555; }
 
+    /* --- Game HUD Overlay --- */
+    #game-hud-overlay {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 44px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 500;
+      pointer-events: none;
+      padding: 0 16px;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'Courier New', monospace;
+    }
+    #hud-room-code {
+      color: #0ff;
+      font-size: 0.85rem;
+      letter-spacing: 3px;
+      text-shadow: 0 0 8px #0ff;
+    }
+    #hud-players {
+      display: flex;
+      gap: 8px;
+    }
+    .hud-player-pill {
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+    }
+    .hud-player-pill.cyan { color: #0ff; border: 1px solid rgba(0,255,255,0.4); }
+    .hud-player-pill.magenta { color: #f0f; border: 1px solid rgba(255,0,255,0.4); }
+    .hud-player-pill.yellow { color: #ff0; border: 1px solid rgba(255,255,0,0.4); }
+    .hud-player-pill.green { color: #0f0; border: 1px solid rgba(0,255,0,0.4); }
+
     /* --- Disconnect Overlay --- */
     #disconnect-overlay {
       display: none;
@@ -312,6 +348,12 @@
   <!-- Game Container -->
   <div id="game-container"></div>
 
+  <!-- Game HUD Overlay -->
+  <div id="game-hud-overlay">
+    <div id="hud-room-code"></div>
+    <div id="hud-players"></div>
+  </div>
+
   <!-- Disconnect Overlay -->
   <div id="disconnect-overlay">
     <h2>PLAYER DISCONNECTED</h2>
@@ -329,9 +371,33 @@
     let currentRoomCode = null;
     let gameInstance = null;
     let playerNames = {};
+    let playerFaces = {};
     let selectedPlayerCount = 2;
     let lastLocalIP = null;
     let lastPort = null;
+
+    // --- HUD helpers ---
+    function showGameHUD(roomCode) {
+      const hud = document.getElementById('game-hud-overlay');
+      hud.style.display = 'flex';
+      document.getElementById('hud-room-code').textContent = `ROOM ${roomCode}`;
+      renderHUDPlayers();
+    }
+    function hideGameHUD() {
+      document.getElementById('game-hud-overlay').style.display = 'none';
+    }
+    function renderHUDPlayers() {
+      const container = document.getElementById('hud-players');
+      const cssClasses = ['cyan', 'magenta', 'yellow', 'green'];
+      container.innerHTML = '';
+      for (let i = 0; i < selectedPlayerCount; i++) {
+        const name = playerNames[i] || 'AI';
+        const pill = document.createElement('span');
+        pill.className = `hud-player-pill ${cssClasses[i]}`;
+        pill.textContent = name;
+        container.appendChild(pill);
+      }
+    }
 
     // --- Socket connection ---
     const socket = io();
@@ -549,7 +615,14 @@
     });
 
     // --- Disconnect ---
+    socket.on('player-temporarily-disconnected', ({ playerIndex }) => {
+      document.getElementById('disconnect-overlay').style.display = 'flex';
+    });
+    socket.on('player-rejoined', ({ playerIndex }) => {
+      document.getElementById('disconnect-overlay').style.display = 'none';
+    });
     socket.on('player-disconnected', ({ playerIndex }) => {
+      // Permanent disconnect (after grace period expired)
       document.getElementById('disconnect-overlay').style.display = 'flex';
     });
     socket.on('player-left', ({ playerIndex }) => {
@@ -682,8 +755,9 @@
     });
 
     // Game start — handles both host and viewer modes
-    socket.on('game-start', ({ level, lives, playerCount, humanPlayers }) => {
+    socket.on('game-start', ({ level, lives, playerCount, humanPlayers, faces }) => {
       if (typeof initAudio === 'function') initAudio();
+      if (faces) playerFaces = faces;
 
       if (isViewer) {
         const pc = playerCount || selectedPlayerCount || 2;
@@ -692,14 +766,16 @@
       } else {
         // Original host behavior
         showScreen('game-container');
+        showGameHUD(currentRoomCode);
         const pc = playerCount || selectedPlayerCount || 2;
         const hp = humanPlayers || Object.keys(playerNames).map(Number);
         if (!gameInstance) {
-          gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, false);
+          gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, false, playerFaces);
         } else {
           gameInstance._playerCount = pc;
           gameInstance._humanPlayers = hp;
           gameInstance._playerNames = playerNames;
+          gameInstance._playerFaces = playerFaces;
           gameInstance.scene.getScene('GameScene').scene.restart({
             level: 1, lives: lives || 3, score: 0, playerCount: pc, humanPlayers: hp
           });
@@ -709,12 +785,14 @@
 
     function startViewerGame(level, lives, score, pc, hp) {
       showScreen('game-container');
+      showGameHUD(currentRoomCode);
       if (!gameInstance) {
-        gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, true);
+        gameInstance = createGame(socket, currentRoomCode, playerNames, pc, hp, true, playerFaces);
       } else {
         gameInstance._playerCount = pc;
         gameInstance._humanPlayers = hp;
         gameInstance._playerNames = playerNames;
+        gameInstance._playerFaces = playerFaces;
         const sceneName = 'ViewerGameScene';
         const scene = gameInstance.scene.getScene(sceneName);
         if (scene) {
@@ -726,6 +804,7 @@
     // Back to lobby — handles both host and viewer modes
     socket.on('back-to-lobby', ({ playerList }) => {
       document.getElementById('disconnect-overlay').style.display = 'none';
+      hideGameHUD();
       showScreen('qr-screen');
 
       if (isViewer) {
