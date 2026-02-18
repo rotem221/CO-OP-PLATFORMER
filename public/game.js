@@ -1119,21 +1119,14 @@ class ViewerGameScene extends Phaser.Scene {
 
       this._socket.off('game-over-lives');
       this._socket.on('game-over-lives', ({ score, level }) => {
-        this.tweens.add({
-          targets: this.players, alpha: 0, duration: 600,
-          onComplete: () => {
-            this.time.delayedCall(400, () => {
-              this.scene.start('GameOverScene', { level: level || this.currentLevel, score: score || 0 });
-            });
-          },
-        });
+        this.scene.start('GameOverScene', { level: level || this.currentLevel, score: score || 0 });
       });
 
       this._socket.off('game-victory');
       this._socket.on('game-victory', ({ score, lives }) => {
         this.game._finalScore = score || 0;
         this.game._finalLives = lives || 0;
-        this.time.delayedCall(1500, () => { this.scene.start('VictoryScene'); });
+        this.scene.start('VictoryScene');
       });
 
     }
@@ -1151,11 +1144,11 @@ class ViewerGameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    // Interpolate player positions smoothly
+    // Snap player positions directly — zero latency
     this.players.forEach((p, i) => {
       if (p.targetX !== undefined) {
-        p.x += (p.targetX - p.x) * 0.3;
-        p.y += (p.targetY - p.y) * 0.3;
+        p.x = p.targetX;
+        p.y = p.targetY;
       }
     });
 
@@ -1248,22 +1241,16 @@ class VictoryScene extends Phaser.Scene {
       },
     });
 
-    // Play Again (host only — viewers see "waiting" message)
+    // Play Again button (available for all — host and viewer)
     const btnY = boardY + 200;
-    if (this.game._isViewer) {
-      this.add.text(640, btnY, 'Waiting for host...', {
-        fontFamily: 'Courier New', fontSize: '18px', color: '#555',
-      }).setOrigin(0.5);
-    } else {
-      const playAgainBg = this.add.rectangle(640, btnY, 240, 56, 0x00ff00, 0.15).setInteractive({ useHandCursor: true });
-      this.add.rectangle(640, btnY, 240, 56).setStrokeStyle(2, 0x00ff00);
-      this.add.text(640, btnY, 'PLAY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#00ff00' }).setOrigin(0.5);
-      playAgainBg.on('pointerover', () => playAgainBg.setFillStyle(0x00ff00, 0.3));
-      playAgainBg.on('pointerout', () => playAgainBg.setFillStyle(0x00ff00, 0.15));
-      playAgainBg.on('pointerdown', () => {
-        if (this._socket && this._roomCode) this._socket.emit('play-again', { roomCode: this._roomCode });
-      });
-    }
+    const playAgainBg = this.add.rectangle(640, btnY, 240, 56, 0x00ff00, 0.15).setInteractive({ useHandCursor: true });
+    this.add.rectangle(640, btnY, 240, 56).setStrokeStyle(2, 0x00ff00);
+    this.add.text(640, btnY, 'PLAY AGAIN', { fontFamily: 'Courier New', fontSize: '22px', color: '#00ff00' }).setOrigin(0.5);
+    playAgainBg.on('pointerover', () => playAgainBg.setFillStyle(0x00ff00, 0.3));
+    playAgainBg.on('pointerout', () => playAgainBg.setFillStyle(0x00ff00, 0.15));
+    playAgainBg.on('pointerdown', () => {
+      if (this._socket && this._roomCode) this._socket.emit('play-again', { roomCode: this._roomCode });
+    });
 
     this._socket = this.game._socket;
     this._roomCode = this.game._roomCode;
@@ -1307,32 +1294,25 @@ class GameOverScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // Buttons (host only — viewers see "waiting" message)
-    if (this.game._isViewer) {
-      this.add.text(640, 460, 'Waiting for host...', {
-        fontFamily: 'Courier New', fontSize: '18px', color: '#555',
-      }).setOrigin(0.5);
-    } else {
-      // TRY AGAIN (same level)
-      const retryBg = this.add.rectangle(640, 440, 260, 50, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
-      this.add.rectangle(640, 440, 260, 50).setStrokeStyle(2, 0xff0044);
-      this.add.text(640, 440, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '20px', color: '#ff0044' }).setOrigin(0.5);
-      retryBg.on('pointerover', () => retryBg.setFillStyle(0xff0044, 0.3));
-      retryBg.on('pointerout', () => retryBg.setFillStyle(0xff0044, 0.15));
-      retryBg.on('pointerdown', () => {
-        if (this._socket && this._roomCode) this._socket.emit('try-again', { roomCode: this._roomCode });
-      });
+    // TRY AGAIN (same level)
+    const retryBg = this.add.rectangle(640, 440, 260, 50, 0xff0044, 0.15).setInteractive({ useHandCursor: true });
+    this.add.rectangle(640, 440, 260, 50).setStrokeStyle(2, 0xff0044);
+    this.add.text(640, 440, 'TRY AGAIN', { fontFamily: 'Courier New', fontSize: '20px', color: '#ff0044' }).setOrigin(0.5);
+    retryBg.on('pointerover', () => retryBg.setFillStyle(0xff0044, 0.3));
+    retryBg.on('pointerout', () => retryBg.setFillStyle(0xff0044, 0.15));
+    retryBg.on('pointerdown', () => {
+      if (this._socket && this._roomCode) this._socket.emit('try-again', { roomCode: this._roomCode });
+    });
 
-      // RESTART FROM LEVEL 1
-      const restartBg = this.add.rectangle(640, 510, 260, 50, 0xffaa00, 0.15).setInteractive({ useHandCursor: true });
-      this.add.rectangle(640, 510, 260, 50).setStrokeStyle(2, 0xffaa00);
-      this.add.text(640, 510, 'RESTART', { fontFamily: 'Courier New', fontSize: '20px', color: '#ffaa00' }).setOrigin(0.5);
-      restartBg.on('pointerover', () => restartBg.setFillStyle(0xffaa00, 0.3));
-      restartBg.on('pointerout', () => restartBg.setFillStyle(0xffaa00, 0.15));
-      restartBg.on('pointerdown', () => {
-        if (this._socket && this._roomCode) this._socket.emit('restart-game', { roomCode: this._roomCode });
-      });
-    }
+    // RESTART FROM LEVEL 1
+    const restartBg = this.add.rectangle(640, 510, 260, 50, 0xffaa00, 0.15).setInteractive({ useHandCursor: true });
+    this.add.rectangle(640, 510, 260, 50).setStrokeStyle(2, 0xffaa00);
+    this.add.text(640, 510, 'RESTART', { fontFamily: 'Courier New', fontSize: '20px', color: '#ffaa00' }).setOrigin(0.5);
+    restartBg.on('pointerover', () => restartBg.setFillStyle(0xffaa00, 0.3));
+    restartBg.on('pointerout', () => restartBg.setFillStyle(0xffaa00, 0.15));
+    restartBg.on('pointerdown', () => {
+      if (this._socket && this._roomCode) this._socket.emit('restart-game', { roomCode: this._roomCode });
+    });
 
     if (this._socket) {
       this._socket.off('retry-level');

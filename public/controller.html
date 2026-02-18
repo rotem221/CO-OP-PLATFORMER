@@ -318,7 +318,8 @@
   <div id="gameover-overlay">
     <h1 style="font-size:2.2rem; color:#ff0044; text-shadow:0 0 30px #ff0044; letter-spacing:4px;">GAME OVER</h1>
     <p id="gameover-score" style="color:#ffff00; font-size:1.3rem;"></p>
-    <p style="color:#888; font-size:0.9rem;">Waiting for host...</p>
+    <button id="gameover-retry-btn" style="width:220px; padding:14px; font-size:1.1rem; font-family:'Courier New',monospace; font-weight:bold; background:rgba(255,0,68,0.15); color:#ff0044; border:2px solid #ff0044; border-radius:8px; cursor:pointer; letter-spacing:2px; text-shadow:0 0 8px #ff0044;">TRY AGAIN</button>
+    <button id="gameover-restart-btn" style="width:220px; padding:14px; font-size:1.1rem; font-family:'Courier New',monospace; font-weight:bold; background:rgba(255,170,0,0.15); color:#ffaa00; border:2px solid #ffaa00; border-radius:8px; cursor:pointer; letter-spacing:2px; text-shadow:0 0 8px #ffaa00;">RESTART</button>
   </div>
 
   <!-- Victory Overlay -->
@@ -516,6 +517,14 @@
       if (navigator.vibrate) {
         navigator.vibrate([200, 100, 200, 100, 200]);
       }
+    });
+
+    // Game over buttons
+    document.getElementById('gameover-retry-btn').addEventListener('click', () => {
+      if (myRoomCode) socket.emit('try-again', { roomCode: myRoomCode });
+    });
+    document.getElementById('gameover-restart-btn').addEventListener('click', () => {
+      if (myRoomCode) socket.emit('restart-game', { roomCode: myRoomCode });
     });
 
     // Retry level (after game over)
