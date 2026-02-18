@@ -53,10 +53,18 @@ document.addEventListener('keydown', resumeAudioOnGesture, { once: false });
 function playSound(type) {
   if (!window._soundEnabled) return;
   if (!audioCtx) initAudio();
-  if (!audioCtx || audioCtx.state === 'suspended') {
-    if (audioCtx) audioCtx.resume().catch(() => {});
+  if (!audioCtx) return;
+
+  // If suspended, resume then play (don't drop the sound)
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => { _doPlaySound(type); }).catch(() => {});
     return;
   }
+  _doPlaySound(type);
+}
+
+function _doPlaySound(type) {
+  if (!audioCtx || audioCtx.state !== 'running') return;
   const now = audioCtx.currentTime;
 
   switch (type) {
@@ -210,9 +218,9 @@ const LEVELS = {
       { x: 1900, y: 700, w: 700, h: 32 },
       { x: 2550, y: 700, w: 500, h: 32 },
       { x: 2400, y: 610, w: 180, h: 20 },
-      { x: 2560, y: 530, w: 180, h: 20 },
-      { x: 2400, y: 450, w: 180, h: 20 },
-      { x: 2560, y: 370, w: 180, h: 20 },
+      { x: 2470, y: 530, w: 180, h: 20 },
+      { x: 2540, y: 450, w: 180, h: 20 },
+      { x: 2610, y: 370, w: 180, h: 20 },
       { x: 2680, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -264,9 +272,9 @@ const LEVELS = {
       { x: 2050, y: 600, w: 160, h: 20 },
       { x: 2250, y: 530, w: 160, h: 20 },
       { x: 3100, y: 610, w: 180, h: 20 },
-      { x: 3260, y: 530, w: 180, h: 20 },
-      { x: 3100, y: 450, w: 180, h: 20 },
-      { x: 3260, y: 370, w: 180, h: 20 },
+      { x: 3140, y: 530, w: 180, h: 20 },
+      { x: 3180, y: 450, w: 180, h: 20 },
+      { x: 3180, y: 370, w: 180, h: 20 },
       { x: 3180, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -324,8 +332,8 @@ const LEVELS = {
       { x: 1700, y: 600, w: 160, h: 20 },
       { x: 2300, y: 580, w: 160, h: 20 },
       { x: 3650, y: 610, w: 180, h: 20 },
-      { x: 3800, y: 530, w: 180, h: 20 },
-      { x: 3650, y: 450, w: 180, h: 20 },
+      { x: 3700, y: 530, w: 180, h: 20 },
+      { x: 3750, y: 450, w: 180, h: 20 },
       { x: 3800, y: 370, w: 180, h: 20 },
       { x: 3800, y: 300, w: 200, h: 20 },
     ],
@@ -391,8 +399,8 @@ const LEVELS = {
       { x: 2600, y: 520, w: 160, h: 20 },
       { x: 3300, y: 600, w: 160, h: 20 },
       { x: 4150, y: 610, w: 180, h: 20 },
-      { x: 4300, y: 530, w: 180, h: 20 },
-      { x: 4150, y: 450, w: 180, h: 20 },
+      { x: 4200, y: 530, w: 180, h: 20 },
+      { x: 4250, y: 450, w: 180, h: 20 },
       { x: 4300, y: 370, w: 180, h: 20 },
       { x: 4300, y: 300, w: 200, h: 20 },
     ],
@@ -467,8 +475,8 @@ const LEVELS = {
       { x: 3600, y: 520, w: 140, h: 20 },
       { x: 4000, y: 580, w: 160, h: 20 },
       { x: 4850, y: 610, w: 180, h: 20 },
-      { x: 5000, y: 530, w: 180, h: 20 },
-      { x: 4850, y: 450, w: 180, h: 20 },
+      { x: 4900, y: 530, w: 180, h: 20 },
+      { x: 4950, y: 450, w: 180, h: 20 },
       { x: 5000, y: 370, w: 180, h: 20 },
       { x: 5000, y: 300, w: 200, h: 20 },
     ],
@@ -540,9 +548,9 @@ const LEVELS = {
       { x: 3200, y: 700, w: 400, h: 32 },
       { x: 3700, y: 700, w: 400, h: 32 },
       { x: 300, y: 610, w: 140, h: 20 },
-      { x: 550, y: 530, w: 140, h: 20 },
-      { x: 300, y: 450, w: 140, h: 20 },
-      { x: 550, y: 370, w: 140, h: 20 },
+      { x: 370, y: 530, w: 140, h: 20 },
+      { x: 440, y: 450, w: 140, h: 20 },
+      { x: 510, y: 370, w: 140, h: 20 },
       { x: 1300, y: 600, w: 120, h: 20 },
       { x: 1550, y: 520, w: 120, h: 20 },
       { x: 1800, y: 600, w: 120, h: 20 },
@@ -550,8 +558,8 @@ const LEVELS = {
       { x: 2600, y: 500, w: 120, h: 20 },
       { x: 2800, y: 580, w: 120, h: 20 },
       { x: 3450, y: 610, w: 160, h: 20 },
-      { x: 3600, y: 530, w: 160, h: 20 },
-      { x: 3450, y: 450, w: 160, h: 20 },
+      { x: 3500, y: 530, w: 160, h: 20 },
+      { x: 3550, y: 450, w: 160, h: 20 },
       { x: 3600, y: 370, w: 160, h: 20 },
       { x: 3600, y: 300, w: 180, h: 20 },
     ],
@@ -625,9 +633,9 @@ const LEVELS = {
       { x: 3800, y: 500, w: 120, h: 20 },
       { x: 4100, y: 580, w: 140, h: 20 },
       { x: 4400, y: 610, w: 160, h: 20 },
-      { x: 4600, y: 530, w: 160, h: 20 },
-      { x: 4400, y: 450, w: 160, h: 20 },
-      { x: 4600, y: 370, w: 160, h: 20 },
+      { x: 4450, y: 530, w: 160, h: 20 },
+      { x: 4500, y: 450, w: 160, h: 20 },
+      { x: 4550, y: 370, w: 160, h: 20 },
       { x: 4600, y: 300, w: 180, h: 20 },
     ],
     spikes: [
@@ -712,9 +720,9 @@ const LEVELS = {
       { x: 4500, y: 480, w: 120, h: 20 },
       { x: 4700, y: 560, w: 120, h: 20 },
       { x: 5100, y: 610, w: 160, h: 20 },
-      { x: 5300, y: 530, w: 160, h: 20 },
-      { x: 5100, y: 450, w: 160, h: 20 },
-      { x: 5300, y: 370, w: 160, h: 20 },
+      { x: 5150, y: 530, w: 160, h: 20 },
+      { x: 5200, y: 450, w: 160, h: 20 },
+      { x: 5250, y: 370, w: 160, h: 20 },
       { x: 5300, y: 300, w: 180, h: 20 },
     ],
     spikes: [
@@ -1015,12 +1023,13 @@ class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, levelData.width, levelData.height);
     this.cameras.main.setBackgroundColor(theme.bgStr);
 
-    // --- Gradient sky ---
+    // --- Gradient sky (viewport-locked, no black bars) ---
     const skyGfx = this.add.graphics();
     const skyColors = { cyan: [0x000011, 0x001133, 0x002255], purple: [0x0a0014, 0x1a0030, 0x2a0050], fire: [0x140800, 0x2a1000, 0x3a1800] };
     const sc = skyColors[levelData.theme] || skyColors.cyan;
-    const bandH = Math.ceil(levelData.height / 3);
-    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, levelData.width, bandH); }
+    const bandH = Math.ceil(720 / 3);
+    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, 1280, bandH); }
+    skyGfx.setScrollFactor(0);
     skyGfx.setDepth(-10);
 
     // --- Parallax stars ---
@@ -1223,9 +1232,11 @@ class GameScene extends Phaser.Scene {
       const p = this.physics.add.sprite(spawn.x, spawn.y, tex);
       p.setBounce(0.05);
       p.setCollideWorldBounds(true);
-      p.body.setMaxVelocity(260, 520);
+      p.body.setMaxVelocity(260, 600);
       p.setDepth(10);
       p.playerIndex = i;
+      p._coyoteTimer = 0;
+      p._jumpBuffer = 0;
       this.players.push(p);
 
       // Name label
@@ -1422,8 +1433,25 @@ class GameScene extends Phaser.Scene {
     else if (input.right) player.setVelocityX(260);
     else player.setVelocityX(0);
 
-    if (input.jump && player.body.blocked.down) {
-      player.setVelocityY(-460);
+    // Coyote time: allow jump for 6 frames (~100ms) after leaving ground
+    if (player.body.blocked.down) {
+      player._coyoteTimer = 6;
+    } else if (player._coyoteTimer > 0) {
+      player._coyoteTimer--;
+    }
+
+    // Jump buffer: remember jump press for 6 frames (~100ms)
+    if (input.jump) {
+      player._jumpBuffer = 6;
+    } else if (player._jumpBuffer > 0) {
+      player._jumpBuffer--;
+    }
+
+    // Execute jump if both conditions met
+    if (player._jumpBuffer > 0 && player._coyoteTimer > 0) {
+      player.setVelocityY(-490);
+      player._coyoteTimer = 0;
+      player._jumpBuffer = 0;
       playSound('jump');
       this.spawnJumpParticles(player.x, player.y + 24, PLAYER_COLORS[playerIndex] || 0x00ffff);
     }
@@ -1449,25 +1477,37 @@ class GameScene extends Phaser.Scene {
     else if (dx > 20) aiPlayer.setVelocityX(260);
     else aiPlayer.setVelocityX(0);
 
+    // Stuck detection — if AI hasn't moved for ~1 second, force jump
+    if (!aiPlayer._stuckCounter) aiPlayer._stuckCounter = 0;
+    if (aiPlayer._lastAIX === undefined) aiPlayer._lastAIX = aiPlayer.x;
+    if (Math.abs(aiPlayer.x - aiPlayer._lastAIX) < 2 && aiPlayer.body.blocked.down) {
+      aiPlayer._stuckCounter++;
+    } else {
+      aiPlayer._stuckCounter = 0;
+    }
+    aiPlayer._lastAIX = aiPlayer.x;
+
     // Jump logic
     if (aiPlayer.body.blocked.down) {
-      // Jump if target is significantly above
-      if (dy < -40) {
-        aiPlayer.setVelocityY(-460);
+      // Force jump if stuck for too long (~1 sec at 60fps)
+      if (aiPlayer._stuckCounter > 60) {
+        aiPlayer.setVelocityY(-490);
+        aiPlayer._stuckCounter = 0;
+      }
+      // Jump if target is above (lowered threshold for better staircase nav)
+      else if (dy < -30) {
+        aiPlayer.setVelocityY(-490);
       }
       // Jump if moving toward target but blocked by a wall
       else if ((dx > 30 && aiPlayer.body.blocked.right) || (dx < -30 && aiPlayer.body.blocked.left)) {
-        aiPlayer.setVelocityY(-460);
+        aiPlayer.setVelocityY(-490);
       }
       // Jump over small gaps — if target is ahead and far enough
       else if (Math.abs(dx) > 100 && Math.abs(dy) < 60) {
-        // Simple gap detection: check if AI is near an edge
-        // This triggers a jump when target is far ahead on roughly the same level
         const velX = aiPlayer.body.velocity.x;
         if (Math.abs(velX) > 150) {
-          // Only jump occasionally to avoid constant jumping
           if (Math.random() < 0.03) {
-            aiPlayer.setVelocityY(-460);
+            aiPlayer.setVelocityY(-490);
           }
         }
       }
@@ -1713,12 +1753,13 @@ class ViewerGameScene extends Phaser.Scene {
     this.physics.world.gravity.y = 0; // No gravity for viewer
     this.cameras.main.setBackgroundColor(theme.bgStr);
 
-    // --- Gradient sky ---
+    // --- Gradient sky (viewport-locked, no black bars) ---
     const skyGfx = this.add.graphics();
     const skyColors = { cyan: [0x000011, 0x001133, 0x002255], purple: [0x0a0014, 0x1a0030, 0x2a0050], fire: [0x140800, 0x2a1000, 0x3a1800] };
     const sc = skyColors[levelData.theme] || skyColors.cyan;
-    const bandH = Math.ceil(levelData.height / 3);
-    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, levelData.width, bandH); }
+    const bandH = Math.ceil(720 / 3);
+    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, 1280, bandH); }
+    skyGfx.setScrollFactor(0);
     skyGfx.setDepth(-10);
 
     // --- Parallax stars ---
@@ -2264,7 +2305,7 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, is
     parent: 'game-container',
     backgroundColor: '#000000',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    physics: { default: 'arcade', arcade: { gravity: { y: isViewer ? 0 : 800 }, debug: false } },
+    physics: { default: 'arcade', arcade: { gravity: { y: isViewer ? 0 : 900 }, debug: false } },
     scene: scenes,
   };
 
