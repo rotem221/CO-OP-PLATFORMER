@@ -383,13 +383,21 @@
     if (savedRoom && savedIndex !== null) {
       myRoomCode = savedRoom;
       myPlayerIndex = parseInt(savedIndex, 10);
-      socket.emit('player-rejoin', { roomCode: savedRoom, playerIndex: myPlayerIndex });
     }
+
+    let hasInitiallyConnected = false;
+    socket.on('connect', () => {
+      if (myRoomCode && myPlayerIndex !== null) {
+        socket.emit('player-rejoin', { roomCode: myRoomCode, playerIndex: myPlayerIndex });
+      }
+      hasInitiallyConnected = true;
+    });
 
     socket.on('rejoin-success', ({ playerIndex, gameState, currentLevel, lives }) => {
       myPlayerIndex = playerIndex;
       if (gameState === 'playing') {
         showScreen('controls-screen');
+        startInputHeartbeat();
         document.getElementById('level-display').textContent = `LEVEL ${currentLevel}`;
         const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
         document.getElementById('lives-display').textContent = heartsStr;

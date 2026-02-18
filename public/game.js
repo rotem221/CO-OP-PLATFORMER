@@ -145,14 +145,29 @@ function _doPlaySound(type) {
       });
       break;
     }
+    case 'doorOpen': {
+      // Rising shimmer — two sine oscillators sweeping up
+      [{ from: 400, to: 1200 }, { from: 600, to: 1800 }].forEach((range) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(range.from, now);
+        osc.frequency.exponentialRampToValueAtTime(range.to, now + 0.5);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        osc.start(now); osc.stop(now + 0.55);
+      });
+      break;
+    }
   }
 }
 
 // --- World Themes ---
 const WORLD_THEMES = {
   cyan: {
-    bg: '#000000', grid: 0x0a1a2a, platform: 0x00cccc, platformGlow: 0x00ffff,
-    spike: 0xff0044, gate: 0xff00ff, laser: 0xff0000, bgStr: '#000000',
+    bg: '#000011', grid: 0x0a1a2a, platform: 0x00cccc, platformGlow: 0x00ffff,
+    spike: 0xff0044, gate: 0xff00ff, laser: 0xff0000, bgStr: '#000011',
   },
   purple: {
     bg: '#0a0014', grid: 0x1a0a2a, platform: 0x9944cc, platformGlow: 0xbb66ff,
@@ -217,10 +232,10 @@ const LEVELS = {
       { x: 1500, y: 700, w: 120, h: 32 },
       { x: 1900, y: 700, w: 700, h: 32 },
       { x: 2550, y: 700, w: 500, h: 32 },
-      { x: 2400, y: 610, w: 180, h: 20 },
-      { x: 2470, y: 530, w: 180, h: 20 },
-      { x: 2540, y: 450, w: 180, h: 20 },
-      { x: 2610, y: 370, w: 180, h: 20 },
+      { x: 2680, y: 610, w: 180, h: 20 },
+      { x: 2540, y: 535, w: 180, h: 20 },
+      { x: 2680, y: 460, w: 180, h: 20 },
+      { x: 2540, y: 385, w: 180, h: 20 },
       { x: 2680, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -271,10 +286,10 @@ const LEVELS = {
       { x: 1550, y: 545, w: 160, h: 20 },
       { x: 2050, y: 600, w: 160, h: 20 },
       { x: 2250, y: 530, w: 160, h: 20 },
-      { x: 3100, y: 610, w: 180, h: 20 },
-      { x: 3140, y: 530, w: 180, h: 20 },
-      { x: 3180, y: 450, w: 180, h: 20 },
-      { x: 3180, y: 370, w: 180, h: 20 },
+      { x: 3180, y: 610, w: 180, h: 20 },
+      { x: 3040, y: 535, w: 180, h: 20 },
+      { x: 3180, y: 460, w: 180, h: 20 },
+      { x: 3040, y: 385, w: 180, h: 20 },
       { x: 3180, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -331,10 +346,10 @@ const LEVELS = {
       { x: 900, y: 460, w: 160, h: 20 },
       { x: 1700, y: 600, w: 160, h: 20 },
       { x: 2300, y: 580, w: 160, h: 20 },
-      { x: 3650, y: 610, w: 180, h: 20 },
-      { x: 3700, y: 530, w: 180, h: 20 },
-      { x: 3750, y: 450, w: 180, h: 20 },
-      { x: 3800, y: 370, w: 180, h: 20 },
+      { x: 3800, y: 610, w: 180, h: 20 },
+      { x: 3660, y: 535, w: 180, h: 20 },
+      { x: 3800, y: 460, w: 180, h: 20 },
+      { x: 3660, y: 385, w: 180, h: 20 },
       { x: 3800, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -398,10 +413,10 @@ const LEVELS = {
       { x: 2200, y: 580, w: 160, h: 20 },
       { x: 2600, y: 520, w: 160, h: 20 },
       { x: 3300, y: 600, w: 160, h: 20 },
-      { x: 4150, y: 610, w: 180, h: 20 },
-      { x: 4200, y: 530, w: 180, h: 20 },
-      { x: 4250, y: 450, w: 180, h: 20 },
-      { x: 4300, y: 370, w: 180, h: 20 },
+      { x: 4300, y: 610, w: 180, h: 20 },
+      { x: 4160, y: 535, w: 180, h: 20 },
+      { x: 4300, y: 460, w: 180, h: 20 },
+      { x: 4160, y: 385, w: 180, h: 20 },
       { x: 4300, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -474,10 +489,10 @@ const LEVELS = {
       { x: 3100, y: 580, w: 160, h: 20 },
       { x: 3600, y: 520, w: 140, h: 20 },
       { x: 4000, y: 580, w: 160, h: 20 },
-      { x: 4850, y: 610, w: 180, h: 20 },
-      { x: 4900, y: 530, w: 180, h: 20 },
-      { x: 4950, y: 450, w: 180, h: 20 },
-      { x: 5000, y: 370, w: 180, h: 20 },
+      { x: 5000, y: 610, w: 180, h: 20 },
+      { x: 4860, y: 535, w: 180, h: 20 },
+      { x: 5000, y: 460, w: 180, h: 20 },
+      { x: 4860, y: 385, w: 180, h: 20 },
       { x: 5000, y: 300, w: 200, h: 20 },
     ],
     spikes: [
@@ -547,20 +562,20 @@ const LEVELS = {
       { x: 2800, y: 700, w: 200, h: 32 },
       { x: 3200, y: 700, w: 400, h: 32 },
       { x: 3700, y: 700, w: 400, h: 32 },
-      { x: 300, y: 610, w: 140, h: 20 },
-      { x: 370, y: 530, w: 140, h: 20 },
-      { x: 440, y: 450, w: 140, h: 20 },
-      { x: 510, y: 370, w: 140, h: 20 },
+      { x: 400, y: 610, w: 160, h: 20 },
+      { x: 260, y: 535, w: 160, h: 20 },
+      { x: 400, y: 460, w: 160, h: 20 },
+      { x: 260, y: 385, w: 160, h: 20 },
       { x: 1300, y: 600, w: 120, h: 20 },
       { x: 1550, y: 520, w: 120, h: 20 },
       { x: 1800, y: 600, w: 120, h: 20 },
       { x: 2200, y: 560, w: 140, h: 20 },
       { x: 2600, y: 500, w: 120, h: 20 },
       { x: 2800, y: 580, w: 120, h: 20 },
-      { x: 3450, y: 610, w: 160, h: 20 },
-      { x: 3500, y: 530, w: 160, h: 20 },
-      { x: 3550, y: 450, w: 160, h: 20 },
-      { x: 3600, y: 370, w: 160, h: 20 },
+      { x: 3600, y: 610, w: 180, h: 20 },
+      { x: 3460, y: 535, w: 180, h: 20 },
+      { x: 3600, y: 460, w: 180, h: 20 },
+      { x: 3460, y: 385, w: 180, h: 20 },
       { x: 3600, y: 300, w: 180, h: 20 },
     ],
     spikes: [
@@ -632,10 +647,10 @@ const LEVELS = {
       { x: 3500, y: 580, w: 140, h: 20 },
       { x: 3800, y: 500, w: 120, h: 20 },
       { x: 4100, y: 580, w: 140, h: 20 },
-      { x: 4400, y: 610, w: 160, h: 20 },
-      { x: 4450, y: 530, w: 160, h: 20 },
-      { x: 4500, y: 450, w: 160, h: 20 },
-      { x: 4550, y: 370, w: 160, h: 20 },
+      { x: 4600, y: 610, w: 180, h: 20 },
+      { x: 4460, y: 535, w: 180, h: 20 },
+      { x: 4600, y: 460, w: 180, h: 20 },
+      { x: 4460, y: 385, w: 180, h: 20 },
       { x: 4600, y: 300, w: 180, h: 20 },
     ],
     spikes: [
@@ -719,10 +734,10 @@ const LEVELS = {
       { x: 4200, y: 560, w: 140, h: 20 },
       { x: 4500, y: 480, w: 120, h: 20 },
       { x: 4700, y: 560, w: 120, h: 20 },
-      { x: 5100, y: 610, w: 160, h: 20 },
-      { x: 5150, y: 530, w: 160, h: 20 },
-      { x: 5200, y: 450, w: 160, h: 20 },
-      { x: 5250, y: 370, w: 160, h: 20 },
+      { x: 5300, y: 610, w: 180, h: 20 },
+      { x: 5160, y: 535, w: 180, h: 20 },
+      { x: 5300, y: 460, w: 180, h: 20 },
+      { x: 5160, y: 385, w: 180, h: 20 },
       { x: 5300, y: 300, w: 180, h: 20 },
     ],
     spikes: [
@@ -1675,41 +1690,84 @@ class GameScene extends Phaser.Scene {
   levelComplete() {
     if (this.levelCompleted) return;
     this.levelCompleted = true;
-    playSound('success');
     const levelTime = Date.now() - this.levelStartTime;
+    const doorX = this.exitDoor.x;
+    const doorY = this.exitDoor.y;
 
-    // Celebration particles
-    for (let i = 0; i < 20; i++) {
-      this.time.delayedCall(i * 50, () => {
-        const x = this.exitDoor.x + Phaser.Math.Between(-60, 60);
-        const y = this.exitDoor.y + Phaser.Math.Between(-40, 40);
-        const colors = [0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
-        const c = this.add.circle(x, y, Phaser.Math.Between(3, 7), Phaser.Utils.Array.GetRandom(colors), 0.8);
-        this.tweens.add({ targets: c, y: y - Phaser.Math.Between(30, 80), alpha: 0, duration: 600, onComplete: () => c.destroy() });
-      });
-    }
+    // --- Phase 1: Door Opening Animation (500ms) ---
+    playSound('doorOpen');
 
-    if (this.currentLevel < 9) {
-      const nextLevel = this.currentLevel + 1;
-      if (this._socket && this._roomCode) {
-        this._socket.emit('level-complete', { roomCode: this._roomCode, nextLevel, levelTime });
-      }
-      const transText = this.add.text(640, 360, `LEVEL ${nextLevel}`, {
-        fontFamily: 'Courier New', fontSize: '48px', color: '#00ff00', stroke: '#000', strokeThickness: 4,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(300).setAlpha(0);
+    // Tween door tint green → white
+    this.exitDoor.setTint(0x00ff00);
+    this.tweens.addCounter({
+      from: 0, to: 100, duration: 400,
+      onUpdate: (t) => {
+        const v = Math.floor((t.getValue() / 100) * 255);
+        const tint = Phaser.Display.Color.GetColor(v, 255, v);
+        this.exitDoor.setTint(tint);
+      },
+    });
+
+    // Scale door up with bounce
+    this.tweens.add({ targets: this.exitDoor, scaleX: 1.3, scaleY: 1.15, duration: 400, ease: 'Back.easeOut' });
+
+    // Expand glow
+    this.tweens.add({ targets: this.exitGlow, alpha: 0.6, scaleX: 1.5, scaleY: 1.5, duration: 300 });
+
+    // White circle burst
+    const burst = this.add.circle(doorX, doorY, 8, 0xffffff, 0.8).setDepth(250);
+    this.tweens.add({ targets: burst, scaleX: 6, scaleY: 6, alpha: 0, duration: 500, onComplete: () => burst.destroy() });
+
+    // 12 radial white particles
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const p = this.add.circle(doorX, doorY, 3, 0xffffff, 0.9).setDepth(250);
       this.tweens.add({
-        targets: transText, alpha: 1, duration: 500, yoyo: true, hold: 800,
-        onComplete: () => {
-          transText.destroy();
-          this.scene.restart({ level: nextLevel, lives: this.lives, score: this.score, playerCount: this.playerCount, humanPlayers: this.humanPlayers });
-        },
+        targets: p,
+        x: doorX + Math.cos(angle) * 80,
+        y: doorY + Math.sin(angle) * 80,
+        alpha: 0, duration: 500,
+        onComplete: () => p.destroy(),
       });
-    } else {
-      if (this._socket && this._roomCode) {
-        this._socket.emit('game-over', { roomCode: this._roomCode, levelTime });
-      }
-      this.time.delayedCall(1500, () => { this.scene.start('VictoryScene'); });
     }
+
+    // --- Phase 2: After 500ms — celebration + transition ---
+    this.time.delayedCall(500, () => {
+      playSound('success');
+
+      // Celebration particles
+      for (let i = 0; i < 20; i++) {
+        this.time.delayedCall(i * 50, () => {
+          const x = doorX + Phaser.Math.Between(-60, 60);
+          const y = doorY + Phaser.Math.Between(-40, 40);
+          const colors = [0x00ff00, 0x00ffff, 0xff00ff, 0xffff00];
+          const c = this.add.circle(x, y, Phaser.Math.Between(3, 7), Phaser.Utils.Array.GetRandom(colors), 0.8);
+          this.tweens.add({ targets: c, y: y - Phaser.Math.Between(30, 80), alpha: 0, duration: 600, onComplete: () => c.destroy() });
+        });
+      }
+
+      if (this.currentLevel < 9) {
+        const nextLevel = this.currentLevel + 1;
+        if (this._socket && this._roomCode) {
+          this._socket.emit('level-complete', { roomCode: this._roomCode, nextLevel, levelTime });
+        }
+        const transText = this.add.text(640, 360, `LEVEL ${nextLevel}`, {
+          fontFamily: 'Courier New', fontSize: '48px', color: '#00ff00', stroke: '#000', strokeThickness: 4,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(300).setAlpha(0);
+        this.tweens.add({
+          targets: transText, alpha: 1, duration: 500, yoyo: true, hold: 800,
+          onComplete: () => {
+            transText.destroy();
+            this.scene.restart({ level: nextLevel, lives: this.lives, score: this.score, playerCount: this.playerCount, humanPlayers: this.humanPlayers });
+          },
+        });
+      } else {
+        if (this._socket && this._roomCode) {
+          this._socket.emit('game-over', { roomCode: this._roomCode, levelTime });
+        }
+        this.time.delayedCall(1500, () => { this.scene.start('VictoryScene'); });
+      }
+    });
   }
 
   // === Camera ===
@@ -2303,7 +2361,7 @@ function createGame(socket, roomCode, playerNames, playerCount, humanPlayers, is
     width: 1280,
     height: 720,
     parent: 'game-container',
-    backgroundColor: '#000000',
+    backgroundColor: '#000011',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     physics: { default: 'arcade', arcade: { gravity: { y: isViewer ? 0 : 900 }, debug: false } },
     scene: scenes,

@@ -182,6 +182,35 @@
       z-index: 1;
     }
 
+    /* --- Main Content: side-by-side layout --- */
+    .main-content {
+      display: flex;
+      gap: 32px;
+      width: 100%;
+      max-width: 900px;
+      align-items: flex-start;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+      padding: 0 16px;
+    }
+    .qr-side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      min-width: 200px;
+      flex-shrink: 0;
+    }
+    .config-side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
     /* --- QR + Room Code --- */
     #qr-box {
       background: #fff;
@@ -189,6 +218,10 @@
       border-radius: 12px;
       box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
       flex-shrink: 0;
+      transition: box-shadow 0.3s;
+    }
+    #qr-box:hover {
+      box-shadow: 0 0 40px rgba(0, 255, 255, 0.6), 0 0 80px rgba(0, 255, 255, 0.2);
     }
     #room-code-display {
       font-size: clamp(1.5rem, 4vw, 2rem);
@@ -233,6 +266,9 @@
       flex-direction: column;
       align-items: center;
       gap: 6px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .selector-label {
       color: #888;
@@ -468,7 +504,34 @@
     #disconnect-overlay h2 { color: #f44; text-shadow: 0 0 15px #f44; font-size: 2rem; }
     #disconnect-overlay p { color: #888; animation: pulse 2s ease-in-out infinite; }
 
+    /* --- Credits Footer --- */
+    .credits-footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 20px 16px 16px;
+      color: #444;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 24px;
+      width: 100%;
+      max-width: 900px;
+    }
+    .credits-footer span {
+      color: #0ff;
+      text-shadow: 0 0 8px rgba(0,255,255,0.3);
+    }
+
     /* --- Responsive --- */
+    @media (max-width: 700px) {
+      .main-content {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      .qr-side { min-width: unset; }
+    }
     @media (max-width: 480px) {
       .hero-section { padding: 20px 10px 14px; }
       .character-preview { width: 42px; height: 42px; font-size: 1.2rem; }
@@ -529,50 +592,57 @@
       </div>
     </div>
 
-    <div id="qr-box"></div>
-    <div id="room-code-display"></div>
-    <button id="new-code-btn">&#x1F504; NEW CODE</button>
-    <p id="sound-hint" style="color:#555; font-size:0.85rem; cursor:pointer; position:relative; z-index:1;" onclick="if(typeof initAudio==='function'){initAudio();} this.textContent='🔊 Sound enabled!'; this.style.color='#0f0'; setTimeout(()=>this.style.display='none',1500);">&#x1F507; Click here to enable sound</p>
-
-    <!-- Player count selector -->
-    <div class="selector-card">
-      <span class="selector-label">PLAYERS</span>
-      <div class="player-count-row">
-        <button class="pc-btn" data-count="1">1P</button>
-        <button class="pc-btn active" data-count="2">2P</button>
-        <button class="pc-btn" data-count="3">3P</button>
-        <button class="pc-btn" data-count="4">4P</button>
+    <!-- Main Content: QR on left, Config on right -->
+    <div class="main-content">
+      <div class="qr-side">
+        <div id="qr-box"></div>
+        <div id="room-code-display"></div>
+        <button id="new-code-btn">&#x1F504; NEW CODE</button>
+        <p id="sound-hint" style="color:#555; font-size:0.85rem; cursor:pointer;" onclick="if(typeof initAudio==='function'){initAudio();} this.textContent='🔊 Sound enabled!'; this.style.color='#0f0'; setTimeout(()=>this.style.display='none',1500);">&#x1F507; Click to enable sound</p>
       </div>
-      <span class="ai-hint" id="ai-hint">Empty slots filled by &#x1F916; AI</span>
-    </div>
 
-    <!-- Level selector -->
-    <div class="selector-card" id="level-select-section">
-      <span class="selector-label">START LEVEL</span>
-      <div class="player-count-row" id="level-select-row">
-        <button class="pc-btn active" data-level="1">1</button>
-        <button class="pc-btn" data-level="2">2</button>
-        <button class="pc-btn" data-level="3">3</button>
-        <button class="pc-btn" data-level="4">4</button>
-        <button class="pc-btn" data-level="5">5</button>
-        <button class="pc-btn" data-level="6">6</button>
-        <button class="pc-btn" data-level="7">7</button>
-        <button class="pc-btn" data-level="8">8</button>
-        <button class="pc-btn" data-level="9">9</button>
+      <div class="config-side">
+        <!-- Player count selector -->
+        <div class="selector-card">
+          <span class="selector-label">PLAYERS</span>
+          <div class="player-count-row">
+            <button class="pc-btn" data-count="1">1P</button>
+            <button class="pc-btn active" data-count="2">2P</button>
+            <button class="pc-btn" data-count="3">3P</button>
+            <button class="pc-btn" data-count="4">4P</button>
+          </div>
+          <span class="ai-hint" id="ai-hint">Empty slots filled by &#x1F916; AI</span>
+        </div>
+
+        <!-- Level selector -->
+        <div class="selector-card" id="level-select-section">
+          <span class="selector-label">START LEVEL</span>
+          <div class="player-count-row" id="level-select-row">
+            <button class="pc-btn active" data-level="1">1</button>
+            <button class="pc-btn" data-level="2">2</button>
+            <button class="pc-btn" data-level="3">3</button>
+            <button class="pc-btn" data-level="4">4</button>
+            <button class="pc-btn" data-level="5">5</button>
+            <button class="pc-btn" data-level="6">6</button>
+            <button class="pc-btn" data-level="7">7</button>
+            <button class="pc-btn" data-level="8">8</button>
+            <button class="pc-btn" data-level="9">9</button>
+          </div>
+        </div>
+
+        <!-- Join a Game button (for remote viewers) -->
+        <button id="join-game-btn">JOIN A GAME</button>
+
+        <!-- Viewer join form (hidden by default) -->
+        <div id="viewer-join-section">
+          <p style="color:#888; font-size:0.85rem;">Enter the room code to watch the game</p>
+          <input type="text" id="viewer-room-code" maxlength="4" inputmode="numeric"
+                 pattern="[0-9]*" placeholder="CODE" autocomplete="off">
+          <button id="viewer-join-submit">JOIN</button>
+          <div id="viewer-join-error"></div>
+          <button id="back-to-host-btn">&larr; Back to hosting</button>
+        </div>
       </div>
-    </div>
-
-    <!-- Join a Game button (for remote viewers) -->
-    <button id="join-game-btn">JOIN A GAME</button>
-
-    <!-- Viewer join form (hidden by default) -->
-    <div id="viewer-join-section">
-      <p style="color:#888; font-size:0.85rem;">Enter the room code to watch the game</p>
-      <input type="text" id="viewer-room-code" maxlength="4" inputmode="numeric"
-             pattern="[0-9]*" placeholder="CODE" autocomplete="off">
-      <button id="viewer-join-submit">JOIN</button>
-      <div id="viewer-join-error"></div>
-      <button id="back-to-host-btn">&larr; Back to hosting</button>
     </div>
 
     <p class="waiting-text" id="initial-waiting">Waiting for players...</p>
@@ -602,6 +672,11 @@
         </div>
       </div>
       <p class="waiting-text" id="lobby-status">Waiting for players to ready up...</p>
+    </div>
+
+    <!-- Credits -->
+    <div class="credits-footer">
+      Created by <span>Rotem Dadon</span> &amp; <span>Daniel Ben Aharon</span>
     </div>
   </div>
 
@@ -798,6 +873,7 @@
     // --- Player count selector ---
     document.querySelectorAll('.pc-btn[data-count]').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (typeof initAudio === 'function') initAudio();
         selectedPlayerCount = parseInt(btn.dataset.count);
         updatePlayerCountUI();
         if (currentRoomCode) {
@@ -841,6 +917,7 @@
     // --- Level selector ---
     document.querySelectorAll('.pc-btn[data-level]').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (typeof initAudio === 'function') initAudio();
         selectedStartLevel = parseInt(btn.dataset.level);
         document.querySelectorAll('.pc-btn[data-level]').forEach(b => {
           b.classList.toggle('active', parseInt(b.dataset.level) === selectedStartLevel);
