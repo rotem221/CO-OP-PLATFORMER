@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Controller</title>
+  <style>
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+    }
+
+    /* --- Join Screen --- */
+    #join-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 20px;
+      padding: 20px;
+    }
+    #join-screen h1 {
+      font-size: 1.8rem;
+      color: #0ff;
+      text-shadow: 0 0 15px #0ff;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    #join-screen input {
+      width: 260px;
+      padding: 14px 18px;
+      font-size: 1.2rem;
+      font-family: 'Courier New', monospace;
+      background: #111;
+      border: 2px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    #join-screen input:focus {
+      border-color: #0ff;
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    }
+    #join-screen input::placeholder { color: #555; }
+    #join-btn {
+      width: 260px;
+      padding: 16px;
+      font-size: 1.4rem;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: linear-gradient(135deg, #0ff, #08f);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-shadow: none;
+      letter-spacing: 2px;
+    }
+    #join-btn:active {
+      transform: scale(0.95);
+    }
+    #join-error {
+      color: #f44;
+      text-shadow: 0 0 8px #f44;
+      font-size: 0.9rem;
+      min-height: 1.5em;
+    }
+
+    /* --- Ready Screen --- */
+    #ready-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 24px;
+      padding: 20px;
+    }
+    #player-color {
+      font-size: 2rem;
+      font-weight: bold;
+      letter-spacing: 4px;
+    }
+    #player-color.cyan { color: #0ff; text-shadow: 0 0 20px #0ff; }
+    #player-color.magenta { color: #f0f; text-shadow: 0 0 20px #f0f; }
+    #ready-btn {
+      width: 280px;
+      padding: 24px;
+      font-size: 2rem;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: #111;
+      color: #0f0;
+      border: 3px solid #0f0;
+      border-radius: 12px;
+      cursor: pointer;
+      text-shadow: 0 0 10px #0f0;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+      letter-spacing: 4px;
+      transition: all 0.3s;
+    }
+    #ready-btn:active {
+      background: #0f0;
+      color: #000;
+      text-shadow: none;
+    }
+    #ready-btn.pressed {
+      background: #0f0;
+      color: #000;
+      text-shadow: none;
+      pointer-events: none;
+    }
+    #ready-status {
+      color: #888;
+      font-size: 1rem;
+      text-align: center;
+      min-height: 3em;
+    }
+
+    /* --- Controls Screen --- */
+    #controls-screen {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .ctrl-area {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Left side: direction buttons */
+    #area-left {
+      left: 0; top: 0;
+      width: 30vw; height: 100vh;
+    }
+    #area-right {
+      left: 30vw; top: 0;
+      width: 30vw; height: 100vh;
+    }
+    /* Right side: jump button */
+    #area-jump {
+      left: 60vw; top: 0;
+      width: 40vw; height: 100vh;
+    }
+
+    .ctrl-btn {
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    #btn-left {
+      background: rgba(255, 0, 255, 0.08);
+      color: #f0f;
+      border-right: 1px solid rgba(255, 0, 255, 0.2);
+    }
+    #btn-left:active, #btn-left.active {
+      background: rgba(255, 0, 255, 0.3);
+    }
+
+    #btn-right {
+      background: rgba(255, 0, 255, 0.08);
+      color: #f0f;
+      border-right: 1px solid rgba(255, 0, 255, 0.2);
+    }
+    #btn-right:active, #btn-right.active {
+      background: rgba(255, 0, 255, 0.3);
+    }
+
+    #btn-jump {
+      background: rgba(0, 255, 255, 0.08);
+      color: #0ff;
+      text-shadow: 0 0 15px #0ff;
+      font-size: 2.5rem;
+      letter-spacing: 4px;
+    }
+    #btn-jump:active, #btn-jump.active {
+      background: rgba(0, 255, 255, 0.3);
+    }
+
+    /* Level indicator on controls screen */
+    #level-display {
+      position: fixed;
+      top: 8px; left: 50%;
+      transform: translateX(-50%);
+      color: #888;
+      font-size: 0.8rem;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Lives display */
+    #lives-display {
+      position: fixed;
+      top: 6px; right: 12px;
+      color: #ff0044;
+      font-size: 1.2rem;
+      z-index: 10;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(255, 0, 68, 0.5);
+    }
+
+    /* Game over overlay */
+    #gameover-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 200;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    /* Death flash */
+    #death-flash {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(255, 0, 0, 0.4);
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    /* Victory overlay */
+    #victory-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 200;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    #victory-overlay h1 {
+      font-size: 2.5rem;
+      color: #0f0;
+      text-shadow: 0 0 30px #0f0;
+      letter-spacing: 4px;
+    }
+    #victory-overlay p {
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Join Screen -->
+  <div id="join-screen">
+    <h1>CO-OP<br>PLATFORMER</h1>
+    <input type="text" id="room-code" maxlength="4" inputmode="numeric"
+           pattern="[0-9]*" placeholder="Room Code" autocomplete="off">
+    <input type="text" id="nickname" maxlength="12"
+           placeholder="Your Name" autocomplete="off">
+    <button id="join-btn">JOIN</button>
+    <div id="join-error"></div>
+  </div>
+
+  <!-- Ready Screen -->
+  <div id="ready-screen">
+    <p style="color:#888">You are</p>
+    <div id="player-color"></div>
+    <button id="ready-btn">READY</button>
+    <div id="ready-status"></div>
+  </div>
+
+  <!-- Controls Screen -->
+  <div id="controls-screen">
+    <div id="level-display">LEVEL 1</div>
+    <div id="lives-display">&#10084; &#10084; &#10084;</div>
+    <div class="ctrl-area" id="area-left">
+      <button class="ctrl-btn" id="btn-left">&larr;</button>
+    </div>
+    <div class="ctrl-area" id="area-right">
+      <button class="ctrl-btn" id="btn-right">&rarr;</button>
+    </div>
+    <div class="ctrl-area" id="area-jump">
+      <button class="ctrl-btn" id="btn-jump">JUMP</button>
+    </div>
+  </div>
+
+  <!-- Death Flash Overlay -->
+  <div id="death-flash"></div>
+
+  <!-- Game Over Overlay -->
+  <div id="gameover-overlay">
+    <h1 style="font-size:2.2rem; color:#ff0044; text-shadow:0 0 30px #ff0044; letter-spacing:4px;">GAME OVER</h1>
+    <p id="gameover-score" style="color:#ffff00; font-size:1.3rem;"></p>
+    <p style="color:#888; font-size:0.9rem;">Waiting for host...</p>
+  </div>
+
+  <!-- Victory Overlay -->
+  <div id="victory-overlay">
+    <h1>VICTORY!</h1>
+    <p>All levels complete!</p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // --- State ---
+    let myRoomCode = null;
+    let myPlayerIndex = null;
+    const inputState = { left: false, right: false, jump: false };
+
+    // Pre-fill room code from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl) {
+      document.getElementById('room-code').value = roomFromUrl;
+    }
+
+    // --- Socket ---
+    const socket = io();
+
+    // --- Screen management ---
+    function showScreen(id) {
+      ['join-screen', 'ready-screen', 'controls-screen'].forEach(s => {
+        document.getElementById(s).style.display = 'none';
+      });
+      const el = document.getElementById(id);
+      el.style.display = (id === 'controls-screen') ? 'block' : 'flex';
+    }
+
+    // --- Join ---
+    document.getElementById('join-btn').addEventListener('click', () => {
+      const roomCode = document.getElementById('room-code').value.trim();
+      const nickname = document.getElementById('nickname').value.trim();
+
+      if (!roomCode || roomCode.length !== 4) {
+        document.getElementById('join-error').textContent = 'Enter a 4-digit room code';
+        return;
+      }
+      if (!nickname) {
+        document.getElementById('join-error').textContent = 'Enter your name';
+        return;
+      }
+
+      document.getElementById('join-error').textContent = '';
+      myRoomCode = roomCode;
+      socket.emit('player-join', { roomCode, nickname });
+    });
+
+    // Also allow Enter key on inputs
+    document.getElementById('nickname').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('join-btn').click();
+    });
+    document.getElementById('room-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('nickname').focus();
+    });
+
+    socket.on('join-success', ({ playerIndex }) => {
+      myPlayerIndex = playerIndex;
+      const colorEl = document.getElementById('player-color');
+      if (playerIndex === 0) {
+        colorEl.textContent = 'CYAN';
+        colorEl.className = 'cyan';
+      } else {
+        colorEl.textContent = 'MAGENTA';
+        colorEl.className = 'magenta';
+      }
+      showScreen('ready-screen');
+    });
+
+    socket.on('join-error', ({ message }) => {
+      document.getElementById('join-error').textContent = message;
+    });
+
+    // --- Ready ---
+    document.getElementById('ready-btn').addEventListener('click', () => {
+      socket.emit('player-ready', { roomCode: myRoomCode });
+      document.getElementById('ready-btn').classList.add('pressed');
+      document.getElementById('ready-btn').textContent = 'READY!';
+    });
+
+    socket.on('player-ready-update', ({ playerList }) => {
+      const statuses = playerList.map(p =>
+        `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
+      ).join('\n');
+      document.getElementById('ready-status').textContent = statuses;
+    });
+
+    // --- Game Start ---
+    socket.on('game-start', () => {
+      showScreen('controls-screen');
+      requestWakeLock();
+    });
+
+    // --- Touch Controls ---
+    function setupButton(id, key) {
+      const btn = document.getElementById(id);
+
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        inputState[key] = true;
+        btn.classList.add('active');
+        sendInput();
+      }, { passive: false });
+
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        inputState[key] = false;
+        btn.classList.remove('active');
+        sendInput();
+      }, { passive: false });
+
+      btn.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        inputState[key] = false;
+        btn.classList.remove('active');
+        sendInput();
+      }, { passive: false });
+
+      // Mouse fallback for desktop testing
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        inputState[key] = true;
+        btn.classList.add('active');
+        sendInput();
+      });
+      btn.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        inputState[key] = false;
+        btn.classList.remove('active');
+        sendInput();
+      });
+      btn.addEventListener('mouseleave', (e) => {
+        if (inputState[key]) {
+          inputState[key] = false;
+          btn.classList.remove('active');
+          sendInput();
+        }
+      });
+    }
+
+    setupButton('btn-left', 'left');
+    setupButton('btn-right', 'right');
+    setupButton('btn-jump', 'jump');
+
+    function sendInput() {
+      if (myRoomCode) {
+        socket.volatile.emit('player-input', {
+          roomCode: myRoomCode,
+          input: { ...inputState }
+        });
+      }
+    }
+
+    // --- WakeLock ---
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && !wakeLock) {
+              wakeLock = await navigator.wakeLock.request('screen');
+            }
+          });
+        }
+      } catch (err) {
+        // WakeLock not available, silently ignore
+      }
+    }
+
+    // --- Game Events ---
+    socket.on('reset-level', () => {
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+      }
+      // Flash red
+      const flash = document.getElementById('death-flash');
+      flash.style.display = 'block';
+      setTimeout(() => { flash.style.display = 'none'; }, 300);
+    });
+
+    // Lives update
+    socket.on('lives-update', ({ lives }) => {
+      const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
+      document.getElementById('lives-display').textContent = heartsStr || '---';
+    });
+
+    // Game over (no lives)
+    socket.on('game-over-lives', ({ score, level }) => {
+      document.getElementById('gameover-overlay').style.display = 'flex';
+      document.getElementById('gameover-score').textContent = `Score: ${score}`;
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200, 100, 200]);
+      }
+    });
+
+    // Retry level (after game over)
+    socket.on('retry-level', ({ level, lives }) => {
+      document.getElementById('gameover-overlay').style.display = 'none';
+      const heartsStr = Array(lives).fill('\u2764').join(' ');
+      document.getElementById('lives-display').textContent = heartsStr;
+      document.getElementById('level-display').textContent = `LEVEL ${level}`;
+    });
+
+    socket.on('level-transition', ({ nextLevel, score, lives }) => {
+      document.getElementById('level-display').textContent = `LEVEL ${nextLevel}`;
+      if (lives !== undefined) {
+        const heartsStr = Array(Math.max(0, lives)).fill('\u2764').join(' ');
+        document.getElementById('lives-display').textContent = heartsStr;
+      }
+    });
+
+    socket.on('game-victory', ({ score, lives }) => {
+      const overlay = document.getElementById('victory-overlay');
+      overlay.style.display = 'flex';
+      const heartsStr = lives > 0 ? Array(lives).fill('\u2764').join(' ') : '';
+      overlay.innerHTML = `
+        <h1 style="font-size:2.2rem; color:#0f0; text-shadow:0 0 30px #0f0; letter-spacing:4px;">VICTORY!</h1>
+        <p style="color:#0ff; text-shadow:0 0 10px #0ff;">All levels complete!</p>
+        <p style="color:#ffff00; font-size:1.5rem; margin-top:12px;">Score: ${score || 0}</p>
+        <p style="color:#ff0044; font-size:1.3rem;">${heartsStr}</p>
+      `;
+    });
+
+    socket.on('back-to-lobby', ({ playerList }) => {
+      document.getElementById('victory-overlay').style.display = 'none';
+      document.getElementById('gameover-overlay').style.display = 'none';
+      document.getElementById('ready-btn').classList.remove('pressed');
+      document.getElementById('ready-btn').textContent = 'READY';
+      document.getElementById('lives-display').textContent = '\u2764 \u2764 \u2764';
+      showScreen('ready-screen');
+
+      const statuses = playerList.map(p =>
+        `${p.nickname}: ${p.ready ? 'READY' : 'waiting...'}`
+      ).join('\n');
+      document.getElementById('ready-status').textContent = statuses;
+    });
+
+    socket.on('room-closed', () => {
+      alert('Host disconnected. Room closed.');
+      location.reload();
+    });
+
+    // Prevent zoom/scroll on the whole page
+    document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+  </script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Co-op Platformer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* --- QR + Lobby (one screen, QR always visible until game starts) --- */
+    #qr-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      gap: 16px;
+      padding: 24px 16px;
+      overflow-y: auto;
+    }
+    #qr-screen h1 {
+      font-size: 2.2rem;
+      color: #0ff;
+      text-shadow: 0 0 20px #0ff, 0 0 40px #0ff;
+      letter-spacing: 4px;
+    }
+    #qr-screen .subtitle {
+      color: #f0f;
+      text-shadow: 0 0 10px #f0f;
+      font-size: 1.1rem;
+    }
+    #qr-box {
+      background: #fff;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
+      flex-shrink: 0;
+    }
+    #room-code-display {
+      font-size: 2rem;
+      letter-spacing: 10px;
+      color: #0ff;
+      text-shadow: 0 0 15px #0ff;
+      margin-top: 4px;
+    }
+    .waiting-text {
+      color: #888;
+      font-size: 1rem;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* Lobby section (below QR, same screen) */
+    #qr-screen .lobby-section {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    #qr-screen .lobby-section.hidden {
+      display: none;
+    }
+    #qr-screen .lobby-section h2 {
+      font-size: 1.5rem;
+      color: #0ff;
+      text-shadow: 0 0 15px #0ff;
+    }
+    .player-slots {
+      display: flex;
+      gap: 40px;
+    }
+    .player-slot {
+      width: 200px;
+      padding: 24px 20px;
+      border-radius: 16px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .player-slot.cyan {
+      border: 2px solid #0ff;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+    }
+    .player-slot.magenta {
+      border: 2px solid #f0f;
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.2);
+    }
+    .player-slot .label {
+      font-size: 0.8rem;
+      margin-bottom: 10px;
+      opacity: 0.6;
+    }
+    .player-slot.cyan .label { color: #0ff; }
+    .player-slot.magenta .label { color: #f0f; }
+    .player-slot .nickname {
+      font-size: 1.3rem;
+      min-height: 1.8em;
+    }
+    .player-slot.cyan .nickname { color: #0ff; text-shadow: 0 0 10px #0ff; }
+    .player-slot.magenta .nickname { color: #f0f; text-shadow: 0 0 10px #f0f; }
+    .player-slot .ready-indicator {
+      margin-top: 12px;
+      font-size: 0.95rem;
+      min-height: 1.4em;
+    }
+    .ready-indicator.ready {
+      color: #0f0;
+      text-shadow: 0 0 10px #0f0;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .ready-indicator.not-ready {
+      color: #555;
+    }
+
+    /* --- Game Container --- */
+    #game-container {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+    }
+    #game-container canvas {
+      display: block;
+    }
+
+    /* --- Disconnect Overlay --- */
+    #disconnect-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    #disconnect-overlay h2 {
+      color: #f44;
+      text-shadow: 0 0 15px #f44;
+      font-size: 2rem;
+    }
+    #disconnect-overlay p {
+      color: #888;
+      animation: pulse 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- QR + Lobby (one screen: QR always visible until game starts) -->
+  <div id="qr-screen">
+    <h1>CO-OP PLATFORMER</h1>
+    <p class="subtitle">Scan to join</p>
+    <div id="qr-box"></div>
+    <div id="room-code-display"></div>
+    <p class="waiting-text" id="initial-waiting">Waiting for players...</p>
+    <p id="sound-hint" style="color:#555; font-size:0.85rem; cursor:pointer;" onclick="if(typeof initAudio==='function'){initAudio();} this.textContent='🔊 Sound enabled!'; this.style.color='#0f0'; setTimeout(()=>this.style.display='none',1500);">🔇 Click here to enable sound</p>
+    <div class="lobby-section hidden" id="lobby-section">
+      <h2>LOBBY</h2>
+      <div class="player-slots">
+        <div class="player-slot cyan" id="slot-0">
+          <div class="label">PLAYER 1 — CYAN</div>
+          <div class="nickname" id="nick-0">—</div>
+          <div class="ready-indicator not-ready" id="ready-0"></div>
+        </div>
+        <div class="player-slot magenta" id="slot-1">
+          <div class="label">PLAYER 2 — MAGENTA</div>
+          <div class="nickname" id="nick-1">—</div>
+          <div class="ready-indicator not-ready" id="ready-1"></div>
+        </div>
+      </div>
+      <p class="waiting-text" id="lobby-status">Waiting for players to ready up...</p>
+    </div>
+  </div>
+
+  <!-- Game Container (Phaser takes over) -->
+  <div id="game-container"></div>
+
+  <!-- Disconnect Overlay -->
+  <div id="disconnect-overlay">
+    <h2>PLAYER DISCONNECTED</h2>
+    <p>Waiting for reconnection...</p>
+  </div>
+
+  <!-- CDN Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+
+  <script>
+    // --- State ---
+    let currentRoomCode = null;
+    let gameInstance = null;
+    let playerNames = {};
+
+    // --- Socket connection ---
+    const socket = io();
+
+    // --- Screen management (QR screen stays visible until game starts; only game-container replaces it) ---
+    function showScreen(id) {
+      document.getElementById('qr-screen').style.display = 'none';
+      document.getElementById('game-container').style.display = 'none';
+      const el = document.getElementById(id);
+      el.style.display = (id === 'game-container') ? 'block' : 'flex';
+    }
+
+    // --- Create room on load ---
+    socket.emit('host-create-room');
+
+    socket.on('room-created', ({ roomCode, localIP, port }) => {
+      currentRoomCode = roomCode;
+      const url = `http://${localIP}:${port}/controller.html?room=${roomCode}`;
+
+      // Generate QR code
+      new QRCode(document.getElementById('qr-box'), {
+        text: url,
+        width: 220,
+        height: 220,
+        colorDark: '#000000',
+        colorLight: '#ffffff'
+      });
+
+      document.getElementById('room-code-display').textContent = roomCode;
+    });
+
+    // --- Player joined (QR stays visible; show lobby section below QR) ---
+    socket.on('player-joined', ({ playerList }) => {
+      playerList.forEach(p => {
+        playerNames[p.playerIndex] = p.nickname;
+      });
+
+      if (playerList.length === 2) {
+        document.getElementById('disconnect-overlay').style.display = 'none';
+      }
+
+      // Stay on qr-screen; show lobby section so everyone can still scan QR
+      if (document.getElementById('game-container').style.display !== 'flex' &&
+          document.getElementById('game-container').style.display !== 'block') {
+        document.getElementById('qr-screen').style.display = 'flex';
+        document.getElementById('lobby-section').classList.remove('hidden');
+        document.getElementById('initial-waiting').style.display = playerList.length ? 'none' : 'block';
+      }
+      updateLobby(playerList);
+    });
+
+    // --- Ready update ---
+    socket.on('player-ready-update', ({ playerList }) => {
+      updateLobby(playerList);
+    });
+
+    function updateLobby(playerList) {
+      for (let i = 0; i < 2; i++) {
+        document.getElementById(`nick-${i}`).textContent = '\u2014';
+        document.getElementById(`ready-${i}`).textContent = '';
+        document.getElementById(`ready-${i}`).className = 'ready-indicator not-ready';
+      }
+
+      playerList.forEach(p => {
+        document.getElementById(`nick-${p.playerIndex}`).textContent = p.nickname;
+        const readyEl = document.getElementById(`ready-${p.playerIndex}`);
+        if (p.ready) {
+          readyEl.textContent = 'READY';
+          readyEl.className = 'ready-indicator ready';
+        } else {
+          readyEl.textContent = 'waiting...';
+          readyEl.className = 'ready-indicator not-ready';
+        }
+      });
+    }
+
+    // --- Ensure audio context is active (needs user gesture on host page) ---
+    // The host may never click the page, so we prompt a click or use the first interaction
+    document.addEventListener('click', () => {
+      if (typeof initAudio === 'function') initAudio();
+    }, { once: true });
+    document.addEventListener('touchstart', () => {
+      if (typeof initAudio === 'function') initAudio();
+    }, { once: true });
+
+    // --- Game start ---
+    socket.on('game-start', ({ level, lives }) => {
+      // Try to init audio when game starts (may work if user clicked page)
+      if (typeof initAudio === 'function') initAudio();
+
+      showScreen('game-container');
+
+      if (!gameInstance) {
+        gameInstance = createGame(socket, currentRoomCode, playerNames);
+      } else {
+        // Restart game scene with fresh lives
+        gameInstance.scene.getScene('GameScene').scene.restart({ level: 1, lives: lives || 3, score: 0 });
+      }
+    });
+
+    // --- Victory (store score/lives for VictoryScene) ---
+    socket.on('game-victory', ({ score, lives }) => {
+      if (gameInstance) {
+        gameInstance._finalScore = score || 0;
+        gameInstance._finalLives = lives || 0;
+        gameInstance._playerNames = playerNames;
+      }
+    });
+
+    // --- Player disconnected during game ---
+    socket.on('player-disconnected', ({ playerIndex }) => {
+      document.getElementById('disconnect-overlay').style.display = 'flex';
+    });
+
+    // --- Player left ---
+    socket.on('player-left', ({ playerIndex }) => {
+      if (document.getElementById('game-container').style.display !== 'none') {
+        document.getElementById('disconnect-overlay').style.display = 'flex';
+      }
+    });
+
+    // --- Back to lobby (QR screen with lobby section, QR still visible) ---
+    socket.on('back-to-lobby', ({ playerList }) => {
+      document.getElementById('disconnect-overlay').style.display = 'none';
+      showScreen('qr-screen');
+      document.getElementById('lobby-section').classList.remove('hidden');
+      updateLobby(playerList);
+
+      if (gameInstance) {
+        gameInstance.destroy(true);
+        gameInstance = null;
+      }
+    });
+  </script>
+</body>
+</html>
