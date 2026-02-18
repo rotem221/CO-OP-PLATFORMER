@@ -611,16 +611,6 @@
       }
     }
 
-    // --- WebRTC Socket Listeners ---
-    socket.on('webrtc-offer', ({ from, offer }) => handleOffer(from, offer));
-    socket.on('webrtc-answer', ({ from, answer }) => handleAnswer(from, answer));
-    socket.on('webrtc-ice-candidate', ({ from, candidate }) => handleIceCandidate(from, candidate));
-    socket.on('webrtc-ready', ({ playerIndex }) => {
-      if (myPlayerIndex !== null && myPlayerIndex < playerIndex) {
-        initiateCall(playerIndex);
-      }
-    });
-
     // Pre-fill room code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
@@ -630,6 +620,16 @@
 
     // --- Socket ---
     const socket = io({ transports: ['websocket'] });
+
+    // --- WebRTC Socket Listeners ---
+    socket.on('webrtc-offer', ({ from, offer }) => handleOffer(from, offer));
+    socket.on('webrtc-answer', ({ from, answer }) => handleAnswer(from, answer));
+    socket.on('webrtc-ice-candidate', ({ from, candidate }) => handleIceCandidate(from, candidate));
+    socket.on('webrtc-ready', ({ playerIndex }) => {
+      if (myPlayerIndex !== null && myPlayerIndex < playerIndex) {
+        initiateCall(playerIndex);
+      }
+    });
 
     // --- Reconnection from sessionStorage ---
     const savedRoom = sessionStorage.getItem('coop_roomCode');
