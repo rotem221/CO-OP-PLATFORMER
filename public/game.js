@@ -22,6 +22,14 @@ window._soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
 window.toggleSound = function() {
   window._soundEnabled = !window._soundEnabled;
   localStorage.setItem('soundEnabled', window._soundEnabled);
+  // Immediately suspend/resume AudioContext to stop/start all audio
+  if (audioCtx) {
+    if (!window._soundEnabled) {
+      audioCtx.suspend().catch(() => {});
+    } else {
+      audioCtx.resume().catch(() => {});
+    }
+  }
   return window._soundEnabled;
 };
 
@@ -966,6 +974,14 @@ class BootScene extends Phaser.Scene {
     gh.fillCircle(7, 5, 3);
     gh.generateTexture('heartPickup', 24, 22); gh.destroy();
 
+    // Ground texture (dirt + grass top)
+    const gGround = this.make.graphics({ add: false });
+    gGround.fillStyle(0x3a2a1a, 1); gGround.fillRect(0, 0, 32, 32);
+    gGround.fillStyle(0x4a3a2a, 0.5); gGround.fillRect(0, 8, 32, 8);
+    gGround.fillStyle(0x2a6a2a, 1); gGround.fillRect(0, 0, 32, 6);
+    gGround.fillStyle(0x3a8a3a, 0.7); gGround.fillRect(0, 0, 32, 3);
+    gGround.generateTexture('ground', 32, 32); gGround.destroy();
+
     const startScene = this.game._isViewer ? 'ViewerGameScene' : 'GameScene';
     this.scene.start(startScene, { level: 1 });
   }
@@ -999,22 +1015,59 @@ class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, levelData.width, levelData.height);
     this.cameras.main.setBackgroundColor(theme.bgStr);
 
+    // --- Gradient sky ---
+    const skyGfx = this.add.graphics();
+    const skyColors = { cyan: [0x000011, 0x001133, 0x002255], purple: [0x0a0014, 0x1a0030, 0x2a0050], fire: [0x140800, 0x2a1000, 0x3a1800] };
+    const sc = skyColors[levelData.theme] || skyColors.cyan;
+    const bandH = Math.ceil(levelData.height / 3);
+    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, levelData.width, bandH); }
+    skyGfx.setDepth(-10);
+
     // --- Parallax stars ---
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 80; i++) {
       const sx = Phaser.Math.Between(0, levelData.width);
-      const sy = Phaser.Math.Between(0, levelData.height);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.1, 0.4);
+      const sy = Phaser.Math.Between(0, levelData.height - 100);
+      const size = Phaser.Math.FloatBetween(0.5, 2.5);
+      const alpha = Phaser.Math.FloatBetween(0.1, 0.5);
       const star = this.add.circle(sx, sy, size, 0xffffff, alpha);
-      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.25));
+      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.3));
+      star.setDepth(-5);
     }
 
-    // --- Background grid ---
+    // --- Distant hills (parallax) ---
+    const hillGfx = this.add.graphics();
+    hillGfx.setScrollFactor(0.15); hillGfx.setDepth(-4);
+    const hillColor = { cyan: 0x002244, purple: 0x1a0040, fire: 0x2a1200 }[levelData.theme] || 0x002244;
+    hillGfx.fillStyle(hillColor, 0.5);
+    for (let hx = 0; hx < levelData.width * 0.8; hx += 200) {
+      const hh = Phaser.Math.Between(80, 180);
+      hillGfx.fillTriangle(hx, levelData.height - 50, hx + 100, levelData.height - 50 - hh, hx + 200, levelData.height - 50);
+    }
+
+    // --- Background grid (subtle) ---
     const bg = this.add.graphics();
-    bg.lineStyle(1, theme.grid, 0.3);
+    bg.lineStyle(1, theme.grid, 0.15);
     for (let x = 0; x < levelData.width; x += 64) { bg.moveTo(x, 0); bg.lineTo(x, levelData.height); }
     for (let y = 0; y < levelData.height; y += 64) { bg.moveTo(0, y); bg.lineTo(levelData.width, y); }
-    bg.strokePath();
+    bg.strokePath(); bg.setDepth(-3);
+
+    // --- Ground layer at bottom ---
+    for (let gx = 0; gx < levelData.width; gx += 32) {
+      this.add.image(gx + 16, levelData.height - 8, 'ground').setDepth(-1);
+    }
+
+    // --- Grass blades on large ground platforms ---
+    const grassGfx = this.add.graphics(); grassGfx.setDepth(0);
+    const grassColor = { cyan: 0x00aa88, purple: 0x6633aa, fire: 0xaa6600 }[levelData.theme] || 0x00aa88;
+    levelData.platforms.forEach(pl => {
+      if (pl.h >= 28 && pl.y >= 680) {
+        for (let bx = pl.x - pl.w / 2; bx < pl.x + pl.w / 2; bx += 8) {
+          const bladeH = Phaser.Math.Between(4, 10);
+          grassGfx.fillStyle(grassColor, Phaser.Math.FloatBetween(0.3, 0.6));
+          grassGfx.fillTriangle(bx, pl.y - pl.h / 2, bx + 2, pl.y - pl.h / 2 - bladeH, bx + 4, pl.y - pl.h / 2);
+        }
+      }
+    });
 
     // --- Level name ---
     this.levelText = this.add.text(640, 30, `LEVEL ${this.currentLevel} — ${levelData.name}`, {
@@ -1023,6 +1076,20 @@ class GameScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.tweens.add({ targets: this.levelText, alpha: 0, duration: 1000 });
     });
+
+    // --- Ambient floating particles ---
+    const ambientColors = { cyan: [0x00ffff, 0x0088aa], purple: [0xbb66ff, 0x8844cc], fire: [0xff8800, 0xff4400] };
+    const ac = ambientColors[levelData.theme] || ambientColors.cyan;
+    for (let i = 0; i < 25; i++) {
+      const px = Phaser.Math.Between(0, levelData.width);
+      const py = Phaser.Math.Between(100, levelData.height - 100);
+      const dot = this.add.circle(px, py, Phaser.Math.FloatBetween(1, 3), Phaser.Utils.Array.GetRandom(ac), Phaser.Math.FloatBetween(0.1, 0.3));
+      dot.setDepth(-2); dot.setScrollFactor(Phaser.Math.FloatBetween(0.3, 0.7));
+      this.tweens.add({
+        targets: dot, y: py - Phaser.Math.Between(30, 80), alpha: 0, duration: Phaser.Math.Between(3000, 6000),
+        yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 3000),
+      });
+    }
 
     // --- Platforms ---
     this.platforms = this.physics.add.staticGroup();
@@ -1110,8 +1177,13 @@ class GameScene extends Phaser.Scene {
       laser.setDisplaySize(l.w, l.h); laser.body.setSize(l.w, l.h);
       laser.setData('config', { onTime: l.onTime, offTime: l.offTime, offset: Math.random() * (l.onTime + l.offTime) });
       laser.setTint(theme.laser);
+      // Inner glow
       const glow = this.add.rectangle(l.x, l.y, l.w + 12, l.h + 4, theme.laser, 0.15);
+      // Outer wide glow for dramatic effect
+      const outerGlow = this.add.rectangle(l.x, l.y, l.w + 30, l.h + 10, theme.laser, 0.06);
+      this.tweens.add({ targets: outerGlow, alpha: { from: 0.03, to: 0.1 }, duration: 600, yoyo: true, repeat: -1 });
       laser.setData('glow', glow);
+      laser.setData('outerGlow', outerGlow);
       this.laserObjects.push(laser);
     });
 
@@ -1287,7 +1359,7 @@ class GameScene extends Phaser.Scene {
 
   // === UPDATE LOOP ===
   update(time, delta) {
-    if (this.levelCompleted) return;
+    if (this.levelCompleted || !this.players || this.players.length === 0) return;
 
     // Human player movement
     this.humanPlayers.forEach(idx => {
@@ -1475,15 +1547,18 @@ class GameScene extends Phaser.Scene {
       const phase = (time + cfg.offset) % cycle;
       const isOn = phase < cfg.onTime;
       const glow = laser.getData('glow');
+      const outerGlow = laser.getData('outerGlow');
       if (isOn) {
         laser.setActive(true).setVisible(true);
         laser.body.enable = true;
         laser.setAlpha(0.7 + Math.sin(time * 0.015) * 0.3);
         if (glow) { glow.setVisible(true); glow.setAlpha(0.1 + Math.sin(time * 0.01) * 0.08); }
+        if (outerGlow) outerGlow.setVisible(true);
       } else {
         laser.setActive(false).setVisible(false);
         laser.body.enable = false;
         if (glow) glow.setVisible(false);
+        if (outerGlow) outerGlow.setVisible(false);
       }
     });
   }
@@ -1498,9 +1573,9 @@ class GameScene extends Phaser.Scene {
     this.isResetting = true;
     playSound('failure');
     this.cameras.main.shake(300, 0.015);
-    this.lives -= 1;
+    this.lives = Math.max(0, this.lives - 1);
 
-    if (this.heartIcons[this.lives]) {
+    if (this.lives >= 0 && this.heartIcons[this.lives]) {
       this.tweens.add({
         targets: this.heartIcons[this.lives], alpha: 0.15, scaleX: 1.8, scaleY: 1.8,
         duration: 400, yoyo: false,
@@ -1529,8 +1604,11 @@ class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.players, alpha: 0, duration: 80, yoyo: true, repeat: 4,
       onComplete: () => {
+        if (!this.scene || !this.scene.isActive()) return;
         const levelData = LEVELS[this.currentLevel];
+        if (!levelData) return;
         this.players.forEach((p, i) => {
+          if (!p || !p.body) return;
           const spawn = levelData.spawns[i] || levelData.spawns[0];
           p.setPosition(spawn.x, spawn.y);
           p.setVelocity(0, 0);
@@ -1596,9 +1674,17 @@ class GameScene extends Phaser.Scene {
 
   // === Camera ===
   updateCamera() {
+    if (!this.players || this.players.length === 0) return;
     const midX = this.players.reduce((s, p) => s + p.x, 0) / this.players.length;
     const midY = this.players.reduce((s, p) => s + p.y, 0) / this.players.length;
     this.cameras.main.centerOn(midX, midY);
+  }
+
+  // Clean up socket listeners when scene shuts down
+  shutdown() {
+    if (this._socket) {
+      this._socket.off('player-input');
+    }
   }
 }
 
@@ -1627,22 +1713,59 @@ class ViewerGameScene extends Phaser.Scene {
     this.physics.world.gravity.y = 0; // No gravity for viewer
     this.cameras.main.setBackgroundColor(theme.bgStr);
 
+    // --- Gradient sky ---
+    const skyGfx = this.add.graphics();
+    const skyColors = { cyan: [0x000011, 0x001133, 0x002255], purple: [0x0a0014, 0x1a0030, 0x2a0050], fire: [0x140800, 0x2a1000, 0x3a1800] };
+    const sc = skyColors[levelData.theme] || skyColors.cyan;
+    const bandH = Math.ceil(levelData.height / 3);
+    for (let b = 0; b < 3; b++) { skyGfx.fillStyle(sc[b], 1); skyGfx.fillRect(0, b * bandH, levelData.width, bandH); }
+    skyGfx.setDepth(-10);
+
     // --- Parallax stars ---
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 80; i++) {
       const sx = Phaser.Math.Between(0, levelData.width);
-      const sy = Phaser.Math.Between(0, levelData.height);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.1, 0.4);
+      const sy = Phaser.Math.Between(0, levelData.height - 100);
+      const size = Phaser.Math.FloatBetween(0.5, 2.5);
+      const alpha = Phaser.Math.FloatBetween(0.1, 0.5);
       const star = this.add.circle(sx, sy, size, 0xffffff, alpha);
-      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.25));
+      star.setScrollFactor(Phaser.Math.FloatBetween(0.05, 0.3));
+      star.setDepth(-5);
     }
 
-    // --- Background grid ---
+    // --- Distant hills ---
+    const hillGfx = this.add.graphics();
+    hillGfx.setScrollFactor(0.15); hillGfx.setDepth(-4);
+    const hillColor = { cyan: 0x002244, purple: 0x1a0040, fire: 0x2a1200 }[levelData.theme] || 0x002244;
+    hillGfx.fillStyle(hillColor, 0.5);
+    for (let hx = 0; hx < levelData.width * 0.8; hx += 200) {
+      const hh = Phaser.Math.Between(80, 180);
+      hillGfx.fillTriangle(hx, levelData.height - 50, hx + 100, levelData.height - 50 - hh, hx + 200, levelData.height - 50);
+    }
+
+    // --- Background grid (subtle) ---
     const bg = this.add.graphics();
-    bg.lineStyle(1, theme.grid, 0.3);
+    bg.lineStyle(1, theme.grid, 0.15);
     for (let x = 0; x < levelData.width; x += 64) { bg.moveTo(x, 0); bg.lineTo(x, levelData.height); }
     for (let y = 0; y < levelData.height; y += 64) { bg.moveTo(0, y); bg.lineTo(levelData.width, y); }
-    bg.strokePath();
+    bg.strokePath(); bg.setDepth(-3);
+
+    // --- Ground layer ---
+    for (let gx = 0; gx < levelData.width; gx += 32) {
+      this.add.image(gx + 16, levelData.height - 8, 'ground').setDepth(-1);
+    }
+
+    // --- Grass blades ---
+    const grassGfx = this.add.graphics(); grassGfx.setDepth(0);
+    const grassColor = { cyan: 0x00aa88, purple: 0x6633aa, fire: 0xaa6600 }[levelData.theme] || 0x00aa88;
+    levelData.platforms.forEach(pl => {
+      if (pl.h >= 28 && pl.y >= 680) {
+        for (let bx = pl.x - pl.w / 2; bx < pl.x + pl.w / 2; bx += 8) {
+          const bladeH = Phaser.Math.Between(4, 10);
+          grassGfx.fillStyle(grassColor, Phaser.Math.FloatBetween(0.3, 0.6));
+          grassGfx.fillTriangle(bx, pl.y - pl.h / 2, bx + 2, pl.y - pl.h / 2 - bladeH, bx + 4, pl.y - pl.h / 2);
+        }
+      }
+    });
 
     // --- Level name ---
     this.levelText = this.add.text(640, 30, `LEVEL ${this.currentLevel} — ${levelData.name}`, {
@@ -1651,6 +1774,20 @@ class ViewerGameScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.tweens.add({ targets: this.levelText, alpha: 0, duration: 1000 });
     });
+
+    // --- Ambient floating particles ---
+    const ambientColors = { cyan: [0x00ffff, 0x0088aa], purple: [0xbb66ff, 0x8844cc], fire: [0xff8800, 0xff4400] };
+    const ac = ambientColors[levelData.theme] || ambientColors.cyan;
+    for (let i = 0; i < 25; i++) {
+      const px = Phaser.Math.Between(0, levelData.width);
+      const py = Phaser.Math.Between(100, levelData.height - 100);
+      const dot = this.add.circle(px, py, Phaser.Math.FloatBetween(1, 3), Phaser.Utils.Array.GetRandom(ac), Phaser.Math.FloatBetween(0.1, 0.3));
+      dot.setDepth(-2); dot.setScrollFactor(Phaser.Math.FloatBetween(0.3, 0.7));
+      this.tweens.add({
+        targets: dot, y: py - Phaser.Math.Between(30, 80), alpha: 0, duration: Phaser.Math.Between(3000, 6000),
+        yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 3000),
+      });
+    }
 
     // --- Platforms (visual only) ---
     levelData.platforms.forEach(p => {
@@ -1937,11 +2074,21 @@ class ViewerGameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    // Snap player positions directly — zero latency
+    if (!this.players || this.players.length === 0) return;
+
+    // Smooth interpolation toward target positions (lerp factor based on delta)
+    const lerpFactor = Math.min(1, delta * 0.015);
     this.players.forEach((p, i) => {
-      if (p.targetX !== undefined) {
+      if (!p || p.targetX === undefined) return;
+      const dx = p.targetX - p.x;
+      const dy = p.targetY - p.y;
+      // Snap if very close or very far (teleport), otherwise lerp
+      if (Math.abs(dx) > 300 || Math.abs(dy) > 300 || (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5)) {
         p.x = p.targetX;
         p.y = p.targetY;
+      } else {
+        p.x += dx * lerpFactor;
+        p.y += dy * lerpFactor;
       }
     });
 
@@ -1953,11 +2100,9 @@ class ViewerGameScene extends Phaser.Scene {
     // Moving platforms & lasers: synced from host via game-state-update (no local computation)
 
     // Camera centroid
-    if (this.players.length > 0) {
-      const midX = this.players.reduce((s, p) => s + p.x, 0) / this.players.length;
-      const midY = this.players.reduce((s, p) => s + p.y, 0) / this.players.length;
-      this.cameras.main.centerOn(midX, midY);
-    }
+    const midX = this.players.reduce((s, p) => s + p.x, 0) / this.players.length;
+    const midY = this.players.reduce((s, p) => s + p.y, 0) / this.players.length;
+    this.cameras.main.centerOn(midX, midY);
   }
 }
 

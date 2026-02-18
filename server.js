@@ -114,33 +114,24 @@ io.on('connection', (socket) => {
     if (timerEntry) {
       clearTimeout(timerEntry.timeout);
       hostDisconnectTimers.delete(roomCode);
-
-      room.hostSocketId = socket.id;
-      socket.join(roomCode);
-
-      socket.emit('room-rejoined', {
-        roomCode,
-        playerList: buildPlayerList(room),
-        gameState: room.gameState,
-        currentLevel: room.currentLevel,
-        lives: room.lives,
-        score: room.score,
-        playerCount: room.playerCount,
-      });
-      console.log(`[room-rejoin] ${roomCode} reclaimed by ${socket.id}`);
-      return;
     }
 
-    // Check if old host socket is truly gone
+    // Check if old host socket is truly gone or timer was active
     const oldHostSocket = io.sockets.sockets.get(room.hostSocketId);
-    if (oldHostSocket && oldHostSocket.connected) {
+    if (oldHostSocket && oldHostSocket.connected && !timerEntry) {
       socket.emit('rejoin-failed', { reason: 'host-already-connected' });
       return;
     }
 
-    // Old host socket gone (no timer) — allow reclaim
+    // Allow reclaim
     room.hostSocketId = socket.id;
     socket.join(roomCode);
+
+    // Build faces map
+    const faces = {};
+    for (const [, p] of room.players) {
+      faces[p.playerIndex] = p.face || 'smiley';
+    }
 
     socket.emit('room-rejoined', {
       roomCode,
@@ -150,8 +141,9 @@ io.on('connection', (socket) => {
       lives: room.lives,
       score: room.score,
       playerCount: room.playerCount,
+      faces,
     });
-    console.log(`[room-rejoin] ${roomCode} reclaimed by ${socket.id} (fallback)`);
+    console.log(`[room-rejoin] ${roomCode} reclaimed by ${socket.id} (state: ${room.gameState})`);
   });
 
   // Host sets player count (1-4)
@@ -173,6 +165,21 @@ io.on('connection', (socket) => {
 
     room.startLevel = Math.max(1, Math.min(9, startLevel));
     console.log(`[start-level] room ${roomCode} → level ${room.startLevel}`);
+  });
+
+  // Host resumed game after page refresh
+  socket.on('host-resumed-game', ({ roomCode }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.gameState !== 'playing') return;
+
+    // Send current game state so the host scene can initialize at the right level
+    socket.emit('resume-game-state', {
+      level: room.currentLevel,
+      lives: room.lives,
+      score: room.score,
+    });
+    console.log(`[host-resumed] room ${roomCode} at level ${room.currentLevel}`);
   });
 
   // Controller joins a room

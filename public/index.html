@@ -494,7 +494,7 @@
     });
 
     // --- Room rejoined (after refresh) ---
-    socket.on('room-rejoined', ({ roomCode, playerList, gameState, currentLevel, lives, score, playerCount }) => {
+    socket.on('room-rejoined', ({ roomCode, playerList, gameState, currentLevel, lives, score, playerCount, faces }) => {
       currentRoomCode = roomCode;
       sessionStorage.setItem('roomCode', roomCode);
       renderQRAndCode(roomCode);
@@ -512,12 +512,25 @@
         updateLobby(playerList);
       }
 
-      // If game was in progress, reset to lobby
-      if (gameState === 'playing' || gameState === 'gameover' || gameState === 'victory') {
+      // If game was in progress, resume the game instead of resetting to lobby
+      if (gameState === 'playing') {
+        if (typeof initAudio === 'function') initAudio();
+        if (faces) playerFaces = faces;
+        showScreen('game-container');
+        showGameHUD(roomCode);
+        const pc = playerCount || selectedPlayerCount || 2;
+        const hp = playerList ? playerList.map(p => p.playerIndex) : [0, 1];
+        if (gameInstance) { gameInstance.destroy(true); gameInstance = null; }
+        gameInstance = createGame(socket, roomCode, playerNames, pc, hp, false, playerFaces);
+        // Tell server to resend current game state
+        socket.emit('host-resumed-game', { roomCode });
+        console.log(`[host] Resumed game at level ${currentLevel}`);
+      } else if (gameState === 'gameover' || gameState === 'victory') {
         socket.emit('play-again', { roomCode });
+        console.log(`[host] Rejoined room ${roomCode}, back to lobby from ${gameState}`);
+      } else {
+        console.log(`[host] Rejoined room ${roomCode} (lobby)`);
       }
-
-      console.log(`[host] Rejoined room ${roomCode} (state: ${gameState})`);
     });
 
     // --- Rejoin failed ---
@@ -835,6 +848,16 @@
           gameInstance.scene.getScene('GameScene').scene.restart({
             level: 1, lives: lives || 3, score: 0, playerCount: pc, humanPlayers: hp
           });
+        }
+      }
+    });
+
+    // Host resumed game after page refresh — set correct level
+    socket.on('resume-game-state', ({ level, lives, score }) => {
+      if (gameInstance && !isViewer) {
+        const scene = gameInstance.scene.getScene('GameScene');
+        if (scene && scene.scene.isActive()) {
+          scene.scene.restart({ level: level || 1, lives: lives || 3, score: score || 0, playerCount: selectedPlayerCount, humanPlayers: Object.keys(playerNames).map(Number) });
         }
       }
     });
